@@ -1,0 +1,2397 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>APK 文字翻译器</title>
+<style>
+  :root {
+    --bg:#0f1115; --bg2:#141821; --card:#181c25; --card2:#1e2330;
+    --line:#262c3a; --line2:#323a4d;
+    --fg:#e8ecf4; --fg2:#aab3c5; --dim:#727d94;
+    --accent:#4f8cff; --accent2:#6ea2ff; --ok:#35d399; --err:#ff6b6b; --warn:#f5b942;
+    --r:14px; --r2:10px;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; padding:0; }
+  body {
+    background:
+      radial-gradient(1200px 500px at 50% -200px, #1b2436 0%, transparent 70%),
+      var(--bg);
+    color:var(--fg);
+    font:15px/1.6 system-ui,-apple-system,"Noto Sans CJK SC","PingFang SC",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:40px;
+  }
+  .app { max-width:820px; margin:0 auto; padding:0 14px; }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar { display:flex; align-items:center; gap:12px; padding:20px 0 16px; }
+  .logo {
+    width:42px; height:42px; flex:0 0 auto; border-radius:12px;
+    background:linear-gradient(140deg,var(--accent),#8b5cf6);
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; font-weight:700; color:#fff;
+    box-shadow:0 6px 18px rgba(79,140,255,.28);
+  }
+  .topbar h1 { margin:0; font-size:17px; font-weight:650; letter-spacing:.3px; }
+  .topbar p { margin:2px 0 0; font-size:12px; color:var(--dim); }
+
+  /* ---------- 进度面板 ---------- */
+  .progress-panel {
+    position:sticky; top:0; z-index:30;
+    margin:0 -14px 12px; padding:12px 14px 13px;
+    background:rgba(20,24,33,.94);
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .pp-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .pp-stage { font-size:13.5px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  .pp-pct { font-size:13px; color:var(--fg2); font-variant-numeric:tabular-nums; }
+  .bar { height:7px; border-radius:99px; background:#0b0e14; overflow:hidden; position:relative; }
+  .bar-fill {
+    height:100%; width:0%; border-radius:99px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    transition:width .28s cubic-bezier(.4,0,.2,1);
+  }
+  .bar.indet .bar-fill {
+    width:36% !important;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);
+    animation:sweep 1.15s linear infinite;
+  }
+  @keyframes sweep { from { transform:translateX(-110%); } to { transform:translateX(320%); } }
+  .pp-detail { margin-top:7px; font-size:12px; color:var(--dim); min-height:16px; }
+
+  /* ---------- 环境提示条 ---------- */
+  .banner {
+    display:flex; gap:10px; align-items:flex-start;
+    border-radius:var(--r); padding:12px 14px; margin-bottom:12px;
+    font-size:13px; line-height:1.55; border:1px solid;
+  }
+  .banner.err  { background:rgba(255,107,107,.10); border-color:rgba(255,107,107,.35); color:#ffc9c9; }
+  .banner.warn { background:rgba(245,185,66,.10); border-color:rgba(245,185,66,.32); color:#ffe2a8; }
+  .banner b { color:#fff; }
+  .banner code { background:rgba(0,0,0,.35); padding:1px 5px; border-radius:4px; font-size:12px; }
+
+  /* ---------- 卡片 ---------- */
+  .card {
+    background:var(--card); border:1px solid var(--line);
+    border-radius:var(--r); padding:16px; margin-bottom:12px;
+  }
+  .card-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .step {
+    width:24px; height:24px; flex:0 0 auto; border-radius:8px;
+    background:#232a39; color:var(--fg2);
+    display:flex; align-items:center; justify-content:center;
+    font-size:12.5px; font-weight:650;
+  }
+  .card-head h2 { margin:0; font-size:14.5px; font-weight:600; }
+  .card-head .spacer { flex:1; }
+
+  /* ---------- 拖放区 ---------- */
+  .drop {
+    border:1.5px dashed var(--line2); border-radius:var(--r);
+    padding:28px 16px; text-align:center; cursor:pointer;
+    transition:border-color .18s, background .18s;
+  }
+  .drop:active, .drop.hover { border-color:var(--accent); background:rgba(79,140,255,.07); }
+  .drop-icon { font-size:30px; line-height:1; margin-bottom:9px; }
+  .drop-title { font-size:14.5px; font-weight:600; }
+  .drop-sub { font-size:12px; color:var(--dim); margin-top:3px; }
+
+  /* ---------- 文件信息 chips ---------- */
+  .chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; }
+  .chip {
+    background:var(--card2); border:1px solid var(--line);
+    border-radius:8px; padding:6px 10px; font-size:12px; color:var(--fg2);
+  }
+  .chip b { color:var(--fg); font-weight:600; }
+
+  /* ---------- 按钮 ---------- */
+  .btn {
+    appearance:none; border:1px solid var(--line2); background:var(--card2); color:var(--fg);
+    padding:11px 15px; border-radius:var(--r2); font-size:14px; font-family:inherit;
+    font-weight:550; cursor:pointer; transition:background .15s, border-color .15s, opacity .15s;
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    min-height:44px;
+  }
+  .btn:active { background:#262d3d; }
+  .btn.primary {
+    background:linear-gradient(140deg,var(--accent),#5b7cf7); border-color:transparent;
+    color:#fff; box-shadow:0 4px 14px rgba(79,140,255,.25);
+  }
+  .btn.primary:active { background:linear-gradient(140deg,#3f7bf0,#4f6fe8); }
+  .btn.block { width:100%; }
+  .btn:disabled { opacity:.4; cursor:not-allowed; box-shadow:none; }
+  .actions { display:flex; flex-wrap:wrap; gap:9px; }
+  .actions .btn { flex:1 1 auto; }
+
+  /* ---------- 设置折叠 ---------- */
+  details.settings { margin-top:12px; border-top:1px solid var(--line); padding-top:12px; }
+  details.settings > summary {
+    cursor:pointer; list-style:none; font-size:13px; color:var(--fg2);
+    display:flex; align-items:center; gap:8px; padding:4px 0;
+  }
+  details.settings > summary::-webkit-details-marker { display:none; }
+  details.settings > summary::before { content:"▸"; color:var(--dim); transition:transform .15s; }
+  details.settings[open] > summary::before { transform:rotate(90deg); }
+  .field { margin-top:11px; }
+  .field label { display:block; font-size:12px; color:var(--dim); margin-bottom:5px; }
+  .row { display:flex; gap:9px; flex-wrap:wrap; }
+  .row > .field { flex:1 1 130px; min-width:0; margin-top:0; }
+  input,select,textarea {
+    width:100%; padding:10px 11px; background:#0c0f15;
+    border:1px solid var(--line); border-radius:var(--r2);
+    color:var(--fg); font-size:14.5px; font-family:inherit; outline:none;
+    transition:border-color .15s;
+  }
+  input:focus,select:focus,textarea:focus { border-color:var(--accent); }
+  input::placeholder { color:#5a6377; }
+
+  /* ---------- 分段控件 ---------- */
+  .mini-label { font-size:12px; color:var(--dim); margin:0 0 6px; display:block; }
+  .seg { display:flex; gap:4px; background:#0c0f15; border:1px solid var(--line); border-radius:var(--r2); padding:4px; }
+  .seg-item {
+    flex:1; appearance:none; border:0; background:transparent; color:var(--fg2);
+    padding:10px 8px; border-radius:8px; font-size:13.5px; font-family:inherit;
+    font-weight:550; cursor:pointer; transition:background .15s, color .15s;
+    display:flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap;
+  }
+  .seg-item.active { background:linear-gradient(140deg,var(--accent),#5b7cf7); color:#fff; }
+  .seg-item:not(.active):active { background:#232a39; }
+
+  /* ---------- 提示条 ---------- */
+  .hint {
+    display:flex; gap:8px; align-items:flex-start;
+    background:rgba(79,140,255,.08); border:1px solid rgba(79,140,255,.22);
+    border-radius:var(--r2); padding:10px 12px; font-size:12.5px; color:var(--fg2);
+    margin-top:12px;
+  }
+  .hint.warn { background:rgba(245,185,66,.08); border-color:rgba(245,185,66,.24); }
+
+  /* ---------- 表格工具 ---------- */
+  .table-tools { display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .table-tools input { flex:1 1 170px; }
+  .tabs { display:flex; background:var(--card2); border:1px solid var(--line); border-radius:var(--r2); padding:3px; gap:2px; }
+  .tab {
+    appearance:none; border:0; background:transparent; color:var(--fg2);
+    padding:7px 12px; border-radius:7px; font-size:12.5px; font-family:inherit;
+    cursor:pointer; white-space:nowrap;
+  }
+  .tab.active { background:var(--accent); color:#fff; font-weight:600; }
+
+  /* ---------- 表格 ---------- */
+  .table-wrap { max-height:58vh; overflow:auto; border:1px solid var(--line); border-radius:var(--r2); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th {
+    position:sticky; top:0; z-index:1; background:var(--card2);
+    text-align:left; padding:9px 10px; font-weight:600; font-size:12px; color:var(--fg2);
+    border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  tbody td { padding:7px 10px; border-bottom:1px solid #202533; vertical-align:top; }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody tr.done { background:rgba(53,211,153,.045); }
+  .cell-idx { color:var(--dim); font-size:11.5px; font-variant-numeric:tabular-nums; width:44px; }
+  .cell-src { color:var(--fg2); word-break:break-word; }
+  td textarea { padding:7px 9px; font-size:13px; line-height:1.5; min-height:38px; resize:vertical; }
+  .dot { display:inline-block; width:6px; height:6px; border-radius:99px; background:var(--line2); margin-right:6px; }
+  tr.done .dot { background:var(--ok); }
+  .empty { padding:26px 10px; text-align:center; color:var(--dim); font-size:13px; }
+
+  /* ---------- 产物 ---------- */
+  .result-box { background:var(--card2); border:1px solid var(--line); border-radius:var(--r2); padding:13px; margin-bottom:12px; }
+  .kv { display:flex; justify-content:space-between; gap:12px; padding:4px 0; font-size:13px; }
+  .kv span:first-child { color:var(--dim); }
+  .kv span:last-child { font-weight:550; font-variant-numeric:tabular-nums; }
+  .ok { color:var(--ok); } .err { color:var(--err); } .warn { color:var(--warn); }
+  .muted { color:var(--dim); }
+  .tag {
+    display:inline-block; padding:1.5px 7px; border-radius:6px;
+    background:#232a39; color:var(--fg2); font-size:11px; font-weight:500; margin-left:6px;
+  }
+  .tag.ok { background:rgba(53,211,153,.14); color:var(--ok); }
+  .tag.err { background:rgba(255,107,107,.14); color:var(--err); }
+
+  /* ---------- 日志 ---------- */
+  .log-card { padding:0; overflow:hidden; }
+  .log-card > summary {
+    cursor:pointer; list-style:none; padding:14px 16px; font-size:13.5px; font-weight:600;
+    display:flex; align-items:center; gap:8px;
+  }
+  .log-card > summary::-webkit-details-marker { display:none; }
+  .log-card > summary::before { content:"▸"; color:var(--dim); transition:transform .15s; }
+  .log-card[open] > summary::before { transform:rotate(90deg); }
+  #log {
+    max-height:200px; overflow:auto; padding:0 14px 14px;
+    font:11.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:var(--fg2); white-space:pre-wrap; word-break:break-word;
+  }
+  #log .err { color:var(--err); } #log .ok { color:var(--ok); } #log .warn { color:var(--warn); }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position:fixed; left:50%; bottom:26px; transform:translate(-50%,20px);
+    background:#232a39; border:1px solid var(--line2); color:var(--fg);
+    padding:11px 18px; border-radius:11px; font-size:13.5px; z-index:100;
+    box-shadow:0 10px 30px rgba(0,0,0,.45); opacity:0; pointer-events:none;
+    transition:opacity .2s, transform .2s; max-width:88vw; text-align:center;
+  }
+  .toast.show { opacity:1; transform:translate(-50%,0); }
+  .toast.ok { border-color:rgba(53,211,153,.45); }
+  .toast.err { border-color:rgba(255,107,107,.45); }
+
+  .hide { display:none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="logo">译</div>
+    <div>
+      <h1>APK 文字翻译器</h1>
+      <p>纯本地处理 · 文件不会离开你的设备</p>
+    </div>
+  </header>
+
+  <div id="envBanner" class="banner hide"></div>
+
+  <section id="progressPanel" class="progress-panel hide">
+    <div class="pp-head">
+      <div class="pp-stage"><span id="ppStage">准备中…</span></div>
+      <div class="pp-pct" id="ppPct">0%</div>
+    </div>
+    <div class="bar" id="ppBar"><div class="bar-fill" id="ppFill"></div></div>
+    <div class="pp-detail" id="ppDetail"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="step">1</span><h2>选择 APK</h2></div>
+    <div id="drop" class="drop">
+      <div class="drop-icon">📦</div>
+      <div class="drop-title">点击选择 APK 文件</div>
+      <div class="drop-sub">也可以把文件拖到这里</div>
+    </div>
+    <input id="file" type="file" accept=".apk,application/vnd.android.package-archive" class="hide">
+    <div id="fileInfo" class="hide">
+      <div class="chips" id="fileChips"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="step">2</span><h2>翻译</h2>
+      <div class="spacer"></div>
+      <span id="transStats" class="tag"></span>
+    </div>
+
+    <label class="mini-label">翻译方式</label>
+    <div class="seg" id="engineSeg">
+      <button class="seg-item active" data-engine="auto">🆓 免费翻译</button>
+      <button class="seg-item" data-engine="ai">✨ AI 翻译</button>
+    </div>
+
+    <div class="hint" id="engineHint"><span>💡</span><span id="engineHintText"></span></div>
+
+    <div class="actions" style="margin-top:12px">
+      <button id="btnTranslate" class="btn primary">开始翻译</button>
+    </div>
+    <div class="actions" style="margin-top:9px">
+      <button id="btnImport" class="btn">📥 导入译文</button>
+      <button id="btnSaveJson" class="btn">💾 导出</button>
+    </div>
+    <input id="importFile" type="file" accept=".json,application/json,.txt" class="hide">
+
+    <details class="settings" id="aiSettings">
+      <summary>AI 翻译设置 <span id="keyState" class="tag">未配置 Key</span></summary>
+      <div class="field">
+        <label>DeepSeek API Key（只保存在本机浏览器）</label>
+        <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+      </div>
+      <div class="row" style="margin-top:11px">
+        <div class="field"><label>接口地址</label><input id="apiBase" value="https://api.deepseek.com"></div>
+        <div class="field"><label>模型</label><input id="apiModel" value="deepseek-flash"></div>
+      </div>
+    </details>
+
+    <details class="settings">
+      <summary>语言与范围</summary>
+      <div class="row" style="margin-top:11px">
+        <div class="field"><label>源语言</label><select id="source">
+          <option value="zh" selected>中文</option><option value="en">英文</option>
+          <option value="ja">日文</option><option value="ko">韩文</option>
+        </select></div>
+        <div class="field"><label>目标语言</label><select id="target">
+          <option value="en" selected>英文</option><option value="zh">中文</option>
+          <option value="ja">日文</option><option value="ko">韩文</option>
+          <option value="fr">法文</option><option value="de">德文</option><option value="es">西班牙文</option>
+        </select></div>
+        <div class="field"><label>只翻前 N 条（0=全部）</label><input id="limit" type="number" value="0" min="0"></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="step">3</span><h2>打包并签名</h2></div>
+    <button id="btnBuild" class="btn primary block" disabled>🔨 开始打包</button>
+    <div id="doneCard" class="hide" style="margin-top:14px">
+      <div class="result-box" id="doneInfo"></div>
+      <button id="btnDownload" class="btn primary block">⬇️ 下载已翻译的 APK</button>
+    </div>
+  </section>
+
+  <section class="card hide" id="resultCard">
+    <div class="card-head">
+      <span class="step">📝</span><h2>译文</h2>
+      <div class="spacer"></div>
+      <span id="resCount" class="tag"></span>
+    </div>
+    <div class="table-tools">
+      <input id="search" placeholder="🔍 搜索原文或译文…">
+      <div class="tabs" id="filterTabs">
+        <button class="tab active" data-filter="all">全部</button>
+        <button class="tab" data-filter="todo">未翻译</button>
+        <button class="tab" data-filter="done">已翻译</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:44px">#</th><th style="width:40%">原文</th><th>译文</th></tr></thead>
+        <tbody id="resBody"></tbody>
+      </table>
+      <div id="tableEmpty" class="empty hide">没有符合条件的条目</div>
+    </div>
+    <button id="btnMore" class="btn block hide" style="margin-top:10px">显示更多</button>
+  </section>
+
+  <details class="card log-card">
+    <summary>运行日志</summary>
+    <div id="log"></div>
+  </details>
+
+</div>
+<div id="toast" class="toast"></div>
+
+<script type="module">
+/* ===== 以下由 build-html.mjs 在构建时注入 ===== */
+const OFFLINE_DICT = {"exact":{"确定":"OK","确认":"Confirm","取消":"Cancel","关闭":"Close","打开":"Open","返回":"Back","退出":"Exit","完成":"Done","保存":"Save","保存成功":"Saved","已保存":"Saved","删除":"Delete","移除":"Remove","编辑":"Edit","修改":"Modify","重命名":"Rename","复制":"Copy","已复制":"Copied","粘贴":"Paste","剪切":"Cut","撤销":"Undo","重做":"Redo","刷新":"Refresh","重新加载":"Reload","重试":"Retry","继续":"Continue","下一步":"Next","上一步":"Previous","跳过":"Skip","开始":"Start","暂停":"Pause","停止":"Stop","播放":"Play","搜索":"Search","筛选":"Filter","排序":"Sort","添加":"Add","新建":"New","创建":"Create","选择":"Select","全选":"Select all","取消全选":"Deselect all","应用":"Apply","重置":"Reset","恢复默认":"Restore defaults","默认":"Default","自定义":"Custom","更多":"More","详情":"Details","查看":"View","预览":"Preview","分享":"Share","发送":"Send","接收":"Receive","下载":"Download","上传":"Upload","安装":"Install","更新":"Update","卸载":"Uninstall","启用":"Enable","禁用":"Disable","设置":"Settings","系统设置":"System settings","高级设置":"Advanced settings","通用设置":"General settings","通知":"Notifications","通知管理":"Notification management","消息":"Messages","消息通知":"Message notifications","提示音":"Notification sound","震动":"Vibration","静音":"Mute","免打扰":"Do not disturb","铃声":"Ringtone","音量":"Volume","媒体音量":"Media volume","亮度":"Brightness","自动亮度":"Auto brightness","壁纸":"Wallpaper","主题":"Theme","字体":"Font","字体大小":"Font size","显示":"Display","深色模式":"Dark mode","夜间模式":"Night mode","护眼模式":"Reading mode","语言":"Language","语言和输入法":"Languages & input","输入法":"Input method","键盘":"Keyboard","时间":"Time","日期":"Date","时区":"Time zone","24小时制":"24-hour format","网络":"Network","网络设置":"Network settings","移动网络":"Mobile network","无线网络":"Wi-Fi","蓝牙":"Bluetooth","热点":"Hotspot","飞行模式":"Airplane mode","流量":"Data usage","已连接":"Connected","未连接":"Not connected","连接中":"Connecting","连接失败":"Connection failed","网络不可用":"Network unavailable","网络错误":"Network error","网络异常":"Network error","无网络连接":"No network connection","请检查网络连接":"Please check your network connection","存储":"Storage","存储空间":"Storage space","可用空间":"Available space","已用空间":"Used space","内部存储":"Internal storage","内存":"Memory","清理":"Clean up","清理缓存":"Clear cache","清除缓存":"Clear cache","清除数据":"Clear data","缓存":"Cache","文件":"File","文件夹":"Folder","文件管理":"File manager","路径":"Path","名称":"Name","大小":"Size","类型":"Type","修改时间":"Date modified","电量":"Battery","电池":"Battery","屏幕":"Screen","锁屏":"Lock screen","解锁":"Unlock","密码":"Password","指纹":"Fingerprint","人脸":"Face","隐私":"Privacy","隐私政策":"Privacy Policy","用户协议":"User Agreement","服务条款":"Terms of Service","权限":"Permission","权限管理":"Permission manager","位置":"Location","定位":"Location","相机":"Camera","麦克风":"Microphone","通讯录":"Contacts","联系人":"Contacts","电话":"Phone","短信":"Messages","相册":"Gallery","图库":"Gallery","照片":"Photos","视频":"Video","音乐":"Music","录音":"Record audio","录音机":"Recorder","账号":"Account","账户":"Account","登录":"Sign in","退出登录":"Sign out","注销":"Sign out","注册":"Sign up","注册账号":"Create account","手机号":"Phone number","手机号码":"Phone number","邮箱":"Email","验证码":"Verification code","密码错误":"Incorrect password","忘记密码":"Forgot password","用户名":"Username","昵称":"Nickname","头像":"Avatar","个人资料":"Profile","我的":"Me","首页":"Home","主页":"Home","发现":"Discover","分类":"Categories","购物车":"Cart","订单":"Orders","收藏":"Favorites","历史记录":"History","浏览记录":"Browsing history","设置中心":"Settings center","帮助":"Help","帮助与反馈":"Help & feedback","反馈":"Feedback","意见反馈":"Feedback","关于":"About","关于我们":"About us","版本":"Version","版本号":"Version","检查更新":"Check for updates","已是最新版本":"You're up to date","加载中":"Loading","正在加载":"Loading","请稍候":"Please wait","处理中":"Processing","正在处理":"Processing","已完成":"Completed","成功":"Success","操作成功":"Operation successful","失败":"Failed","操作失败":"Operation failed","错误":"Error","未知错误":"Unknown error","出错了":"Something went wrong","无数据":"No data","暂无数据":"No data","暂无内容":"No content","空空如也":"Nothing here yet","没有更多了":"No more items","已加载全部":"All items loaded","下拉刷新":"Pull to refresh","加载更多":"Load more","今天":"Today","昨天":"Yesterday","明天":"Tomorrow","前天":"The day before yesterday","后天":"The day after tomorrow","上午":"AM","下午":"PM","早上":"Morning","中午":"Noon","晚上":"Evening","凌晨":"Early morning","星期一":"Monday","星期二":"Tuesday","星期三":"Wednesday","星期四":"Thursday","星期五":"Friday","星期六":"Saturday","星期日":"Sunday","星期天":"Sunday","周一":"Mon","周二":"Tue","周三":"Wed","周四":"Thu","周五":"Fri","周六":"Sat","周日":"Sun","年":"Year","月":"Month","日":"Day","小时":"Hour","分钟":"Minute","秒":"Second","全部":"All","全部时间":"All time","最近":"Recent","刚刚":"Just now","更早":"Earlier","是":"Yes","否":"No","好的":"OK","好":"OK","知道了":"Got it","我知道了":"Got it","不再提示":"Don't show again","允许":"Allow","拒绝":"Deny","同意":"Agree","不同意":"Disagree","接受":"Accept","继续安装":"Install anyway","立即体验":"Get started","立即开始":"Start now","稍后再说":"Later","以后再说":"Later","去看看":"Take a look","去设置":"Go to settings","立即更新":"Update now","立即下载":"Download now","确定要删除吗":"Are you sure you want to delete?","删除后无法恢复":"This cannot be undone after deletion","操作不可撤销":"This action cannot be undone","确定要退出吗":"Are you sure you want to exit?","确定要取消吗":"Are you sure you want to cancel?","未读":"Unread","已读":"Read","未接来电":"Missed call","通话记录":"Call history","拨号":"Dial","挂断":"Hang up","接听":"Answer","拒接":"Decline","免提":"Speaker","静音模式":"Silent mode","震动模式":"Vibrate mode","响铃模式":"Ring mode","推荐":"Recommended","热门":"Popular","最新":"Latest","免费":"Free","付费":"Paid","限时":"Limited time","优惠":"Discount","价格":"Price","数量":"Quantity","合计":"Total","总计":"Total","支付":"Pay","立即购买":"Buy now","确认支付":"Confirm payment","支付成功":"Payment successful","支付失败":"Payment failed","余额":"Balance","红包":"Red packet","优惠券":"Coupon","积分":"Points","编辑资料":"Edit profile","修改密码":"Change password","更换头像":"Change avatar","绑定手机":"Link phone number","解除绑定":"Unlink","已绑定":"Linked","未绑定":"Not linked","已开启":"On","已关闭":"Off","开启":"Turn on","关掉":"Turn off","开":"On","关":"Off","自动":"Auto","手动":"Manual","始终":"Always","从不":"Never","仅在使用时":"Only while using","每次询问":"Ask every time","秒前":"seconds ago","分钟前":"minutes ago","小时前":"hours ago","天前":"days ago","刚刚更新":"Updated just now","剩余":"Remaining","剩余时间":"Time remaining","进度":"Progress","速度":"Speed","已完成进度":"Progress","第":"No.","共":"Total","条":"items","个":"items","项":"items","次":"times","张":"photos","首":"songs","部":"videos","篇":"articles"},"templates":{"{}秒前":"{} seconds ago","{}分钟前":"{} minutes ago","{}小时前":"{} hours ago","{}天前":"{} days ago","{}周前":"{} weeks ago","{}个月前":"{} months ago","{}年前":"{} years ago","{}秒后":"in {} seconds","{}分钟后":"in {} minutes","{}小时后":"in {} hours","{}天后":"in {} days","共{}项":"{} items","共{}条":"{} items","共{}个":"{} items","第{}项":"Item {}","第{}条":"Item {}","第{}个":"Item {}","第{}页":"Page {}","共{}页":"{} pages","已选{}项":"{} selected","已选择{}项":"{} selected","{}个结果":"{} results","找到{}个结果":"{} results found","{}条新消息":"{} new messages","{}条未读":"{} unread","{}次下载":"{} downloads","{}次播放":"{} plays","{}人在线":"{} online","{}人正在使用":"{} people using","剩余{}天":"{} days left","剩余{}天{}小时":"{} days {} hours left","还有{}天":"{} days left","{}已保存":"{} saved","{}已删除":"{} deleted","{}已复制":"{} copied","{}已添加":"{} added","{}已取消":"{} canceled","保存到{}":"Saved to {}","下载到{}":"Downloaded to {}","正在下载{}":"Downloading {}","正在安装{}":"Installing {}","正在加载{}":"Loading {}","已连接{}":"Connected to {}","无法连接{}":"Unable to connect to {}","{}不可用":"{} is unavailable","{}已停止":"{} stopped","{}已完成":"{} completed","{}失败":"{} failed","{}成功":"{} successful","确认删除{}":"Delete {}?","确定删除{}吗":"Delete {}?","确认{}":"Confirm {}","允许{}使用{}":"Allow {} to use {}?","{}想要访问{}":"{} wants to access {}","将{}分享到":"Share {} to","把{}分享给好友":"Share {} with friends","{}的照片":"{}'s photos","{}的视频":"{}'s videos","{}的文件":"{}'s files","{}的空间":"{}'s space","请输入{}":"Please enter {}","请选择{}":"Please select {}","请先{}":"Please {} first","请稍后重试":"Please try again later","暂无{}":"No {}","没有{}":"No {}","{}设置":"{} settings","{}管理":"{} management","{}列表":"{} list","{}详情":"{} details","{}信息":"{} information","{}权限":"{} permission","{}版本":"{} version","{}大小":"{} size","{}时长":"{} duration","{}格式":"{} format","{}质量":"{} quality","{}语言":"{} language"}};
+// 词表匹配纯逻辑（不依赖 fs，Node 与浏览器共用同一份实现）
+const DICT_SLOT_RE = /%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[a-zA-Z%]|\{\d+\}/g;
+
+/** 查表用的归一化：去掉空白与句末标点，提升命中率 */
+function normalizeKey(s) {
+  return String(s)
+    .replace(/\s+/g, '')
+    .replace(/[：:。.！!？?，,、；;~～…]+$/g, '');
+}
+/** 把占位符替换成槽位，用于模板匹配 */
+function toShape(s) {
+  return String(s).replace(DICT_SLOT_RE, '{}');
+}
+/** 把字面数字也当作槽位："共12项" 可匹配模板 "共{}项" */
+function toNumberShape(s) {
+  return String(s).replace(/\d+/g, '{}');
+}
+
+/**
+ * @param {{exact:Object, templates:Object}} dict
+ * @returns {{lookup: (s:string)=>string|null, size:number}}
+ */
+function createDictMatcher(dict) {
+  const exactMap = new Map();
+  for (const [k, v] of Object.entries(dict.exact ?? {})) exactMap.set(normalizeKey(k), v);
+  const tplMap = new Map();
+  const tplNumMap = new Map();
+  for (const [k, v] of Object.entries(dict.templates ?? {})) {
+    const nk = toShape(normalizeKey(k));
+    tplMap.set(nk, v);
+    tplNumMap.set(toNumberShape(nk), v);
+  }
+
+  function fill(tpl, values) {
+    let i = 0;
+    const filled = tpl.replace(/\{\}/g, () => values[i++] ?? '');
+    return i === values.length ? filled : null;
+  }
+
+  function lookup(s) {
+    if (typeof s !== 'string' || !s.trim()) return null;
+    const lead = s.match(/^\s*/)[0];
+    const tail = s.match(/\s*$/)[0];
+    const core = s.trim();
+
+    const direct = exactMap.get(normalizeKey(core));
+    if (direct !== undefined) return lead + direct + tail;
+
+    const slots = core.match(DICT_SLOT_RE);
+    if (slots && slots.length) {
+      const tpl = tplMap.get(toShape(normalizeKey(core)));
+      if (tpl !== undefined) {
+        const filled = fill(tpl, slots);
+        if (filled !== null) return lead + filled + tail;
+      }
+    }
+    // 再退一步：把字面数字当槽位
+    const nums = core.match(/\d+/g);
+    if (nums && nums.length <= 3) {
+      const tpl = tplNumMap.get(toNumberShape(toShape(normalizeKey(core))));
+      if (tpl !== undefined) {
+        const filled = fill(tpl, nums);
+        if (filled !== null) return lead + filled + tail;
+      }
+    }
+    return null;
+  }
+  return { lookup, size: exactMap.size + tplMap.size };
+}
+const DICT_SIZE = 430;
+/* ===== 注入结束 ===== */
+
+/* ============================================================================
+ * 0. 基础工具：Buffer 兼容层、CRC32、UTF 编解码、压缩流
+ * ==========================================================================*/
+
+const te = new TextEncoder();
+const td = new TextDecoder('utf-8');
+const tdLatin1 = new TextDecoder('latin1');
+
+class Buf extends Uint8Array {
+  static alloc(n, fill = 0) {
+    const b = new Buf(n);
+    if (fill) b.fill(fill);
+    return b;
+  }
+  static allocUnsafe(n) { return new Buf(n); }
+  static from(src, enc) {
+    if (typeof src === 'string') {
+      if (enc === 'utf16le' || enc === 'ucs2') return encodeUtf16le(src);
+      if (enc === 'latin1' || enc === 'binary' || enc === 'ascii') {
+        const b = new Buf(src.length);
+        for (let i = 0; i < src.length; i++) b[i] = src.charCodeAt(i) & 0xff;
+        return b;
+      }
+      if (enc === 'base64') {
+        const bin = atob(src);
+        const b = new Buf(bin.length);
+        for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+        return b;
+      }
+      return new Buf(te.encode(src));
+    }
+    if (src instanceof ArrayBuffer) return new Buf(src.slice(0));
+    if (ArrayBuffer.isView(src)) {
+      const b = new Buf(src.byteLength);
+      b.set(new Uint8Array(src.buffer, src.byteOffset, src.byteLength));
+      return b;
+    }
+    if (Array.isArray(src)) return new Buf(src);
+    throw new Error('Buf.from 不支持的输入');
+  }
+  static concat(list, totalLength) {
+    let total = totalLength;
+    if (total === undefined) total = list.reduce((s, x) => s + x.length, 0);
+    const out = new Buf(total);
+    let off = 0;
+    for (const x of list) { out.set(x, off); off += x.length; }
+    return out;
+  }
+  subarray(a, b) {
+    const v = super.subarray(a, b);
+    return new Buf(v.buffer, v.byteOffset, v.length);
+  }
+  slice(a, b) {
+    const v = super.slice(a, b);
+    return new Buf(v.buffer, v.byteOffset, v.length);
+  }
+  equals(other) {
+    if (this.length !== other.length) return false;
+    for (let i = 0; i < this.length; i++) if (this[i] !== other[i]) return false;
+    return true;
+  }
+  copy(target, targetStart = 0) { target.set(this, targetStart); return this.length; }
+  readUInt8(o = 0) { return this[o]; }
+  readUInt16LE(o = 0) { return this[o] | (this[o + 1] << 8); }
+  readUInt32LE(o = 0) {
+    return (this[o] | (this[o + 1] << 8) | (this[o + 2] << 16) | (this[o + 3] << 24)) >>> 0;
+  }
+  readInt32LE(o = 0) { return this.readUInt32LE(o) | 0; }
+  readBigUInt64LE(o = 0) {
+    let v = 0n;
+    for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(this[o + i]);
+    return v;
+  }
+  writeUInt8(v, o = 0) { this[o] = v & 0xff; return o + 1; }
+  writeUInt16LE(v, o = 0) { this[o] = v & 0xff; this[o + 1] = (v >>> 8) & 0xff; return o + 2; }
+  writeUInt32LE(v, o = 0) {
+    this[o] = v & 0xff; this[o + 1] = (v >>> 8) & 0xff;
+    this[o + 2] = (v >>> 16) & 0xff; this[o + 3] = (v >>> 24) & 0xff;
+    return o + 4;
+  }
+  writeBigUInt64LE(v, o = 0) {
+    let x = BigInt(v);
+    for (let i = 0; i < 8; i++) { this[o + i] = Number(x & 0xffn); x >>= 8n; }
+    return o + 8;
+  }
+  toString(enc = 'utf8', start = 0, end = this.length) {
+    const v = this.subarray(start, end);
+    if (enc === 'utf16le' || enc === 'ucs2') return decodeUtf16le(v);
+    if (enc === 'latin1' || enc === 'binary') return tdLatin1.decode(v);
+    return td.decode(v);
+  }
+}
+
+function encodeUtf16le(s) {
+  const b = new Buf(s.length * 2);
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    b[i * 2] = c & 0xff; b[i * 2 + 1] = (c >>> 8) & 0xff;
+  }
+  return b;
+}
+function decodeUtf16le(v) {
+  let s = '';
+  for (let i = 0; i + 1 < v.length; i += 2) s += String.fromCharCode(v[i] | (v[i + 1] << 8));
+  return s;
+}
+
+// CRC32（ZIP 校验用）
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// 某些浏览器在 file:// 下禁用 localStorage，统一走安全封装
+const safeStore = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+};
+
+const HAS_COMPRESSION = typeof DecompressionStream !== 'undefined' && typeof CompressionStream !== 'undefined';
+async function inflateRaw(bytes) {
+  if (!HAS_COMPRESSION) throw new Error('当前浏览器不支持 DecompressionStream，无法解压该条目');
+  const ds = new DecompressionStream('deflate-raw');
+  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  return new Buf(await new Response(stream).arrayBuffer());
+}
+async function deflateRaw(bytes) {
+  const cs = new CompressionStream('deflate-raw');
+  const stream = new Blob([bytes]).stream().pipeThrough(cs);
+  return new Buf(await new Response(stream).arrayBuffer());
+}
+
+// 一个简单的并发池
+async function mapPool(items, concurrency, worker, onTick) {
+  let next = 0, done = 0;
+  let firstErr = null;
+  const run = async () => {
+    while (true) {
+      const i = next++;
+      if (i >= items.length || firstErr) return;
+      try { await worker(items[i], i); } catch (e) { if (!firstErr) firstErr = e; return; }
+      done++;
+      onTick?.(done, items.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length || 1) }, run));
+  if (firstErr) throw firstErr;
+}
+
+/* ============================================================================
+ * 1. ZIP 读写（内存版）
+ * ==========================================================================*/
+const LFH_SIG = 0x04034b50, CDH_SIG = 0x02014b50, EOCD_SIG = 0x06054b50;
+const ZIP64_EOCD_SIG = 0x06064b50, ZIP64_LOC_SIG = 0x07064b50;
+const METHOD_STORE = 0, METHOD_DEFLATE = 8;
+const ALIGN_EXTRA_ID = 0xd935;
+
+function openZip(bytes) {
+  const buf = bytes instanceof Buf ? bytes : new Buf(bytes);
+  let eocdOffset = -1;
+  const scanStart = Math.max(0, buf.length - 66 * 1024);
+  for (let i = buf.length - 22; i >= scanStart; i--) {
+    if (buf.readUInt32LE(i) === EOCD_SIG) { eocdOffset = i; break; }
+  }
+  if (eocdOffset < 0) throw new Error('不是有效的 ZIP：找不到 EOCD');
+
+  let entryCount = buf.readUInt16LE(eocdOffset + 10);
+  let cdSize = buf.readUInt32LE(eocdOffset + 12);
+  let cdOffset = buf.readUInt32LE(eocdOffset + 16);
+  if (cdOffset === 0xffffffff || cdSize === 0xffffffff || entryCount === 0xffff) {
+    const locOff = eocdOffset - 20;
+    if (locOff >= 0 && buf.readUInt32LE(locOff) === ZIP64_LOC_SIG) {
+      const z64Off = Number(buf.readBigUInt64LE(locOff + 8));
+      if (buf.readUInt32LE(z64Off) !== ZIP64_EOCD_SIG) throw new Error('ZIP64 EOCD 损坏');
+      entryCount = Number(buf.readBigUInt64LE(z64Off + 32));
+      cdSize = Number(buf.readBigUInt64LE(z64Off + 40));
+      cdOffset = Number(buf.readBigUInt64LE(z64Off + 48));
+    }
+  }
+
+  const entries = [];
+  const byName = new Map();
+  let p = cdOffset;
+  for (let i = 0; i < entryCount; i++) {
+    if (buf.readUInt32LE(p) !== CDH_SIG) throw new Error(`中央目录第 ${i} 项签名错误`);
+    const flags = buf.readUInt16LE(p + 8);
+    const method = buf.readUInt16LE(p + 10);
+    const dosTime = buf.readUInt16LE(p + 12);
+    const dosDate = buf.readUInt16LE(p + 14);
+    const crc = buf.readUInt32LE(p + 16);
+    let compressedSize = buf.readUInt32LE(p + 20);
+    let uncompressedSize = buf.readUInt32LE(p + 24);
+    const nameLen = buf.readUInt16LE(p + 28);
+    const extraLen = buf.readUInt16LE(p + 30);
+    const commentLen = buf.readUInt16LE(p + 32);
+    const externalAttr = buf.readUInt32LE(p + 38);
+    let localHeaderOffset = buf.readUInt32LE(p + 42);
+    const name = buf.toString('utf8', p + 46, p + 46 + nameLen);
+    const extra = buf.subarray(p + 46 + nameLen, p + 46 + nameLen + extraLen);
+    if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff || localHeaderOffset === 0xffffffff) {
+      let q = 0;
+      while (q + 4 <= extra.length) {
+        const id = extra.readUInt16LE(q), sz = extra.readUInt16LE(q + 2);
+        if (id === 0x0001) {
+          let r = q + 4;
+          if (uncompressedSize === 0xffffffff) { uncompressedSize = Number(extra.readBigUInt64LE(r)); r += 8; }
+          if (compressedSize === 0xffffffff) { compressedSize = Number(extra.readBigUInt64LE(r)); r += 8; }
+          if (localHeaderOffset === 0xffffffff) { localHeaderOffset = Number(extra.readBigUInt64LE(r)); r += 8; }
+          break;
+        }
+        q += 4 + sz;
+      }
+    }
+    const entry = { name, flags, method, dosTime, dosDate, crc32: crc, compressedSize,
+                    uncompressedSize, externalAttr, localHeaderOffset, isDirectory: name.endsWith('/') };
+    entries.push(entry);
+    byName.set(name, entry);
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+
+  const dataOffset = (entry) => {
+    const o = entry.localHeaderOffset;
+    if (buf.readUInt32LE(o) !== LFH_SIG) throw new Error(`本地头损坏: ${entry.name}`);
+    return o + 30 + buf.readUInt16LE(o + 26) + buf.readUInt16LE(o + 28);
+  };
+
+  return {
+    bytes: buf, entries, byName, cdOffset, cdSize, eocdOffset,
+    get(name) { return byName.get(name); },
+    dataOffset,
+    rawSlice(entry) { return buf.subarray(dataOffset(entry), dataOffset(entry) + entry.compressedSize); },
+    async read(name) {
+      const e = typeof name === 'string' ? byName.get(name) : name;
+      if (!e) throw new Error(`条目不存在: ${name}`);
+      if (e.flags & 0x1) throw new Error(`条目已加密: ${e.name}`);
+      const raw = this.rawSlice(e);
+      if (e.method === METHOD_STORE) return raw;
+      if (e.method === METHOD_DEFLATE) return await inflateRaw(raw);
+      throw new Error(`不支持的压缩方法 ${e.method}: ${e.name}`);
+    },
+    /** 只读取前 n 字节（用于嗅探魔数，避免解压整个文件） */
+    peek(entry, n) { return buf.subarray(dataOffset(entry), dataOffset(entry) + Math.min(n, entry.compressedSize)); },
+  };
+}
+
+class ZipWriter {
+  constructor() { this.chunks = []; this.offset = 0; this.records = []; }
+  _write(b) { this.chunks.push(b); this.offset += b.length; }
+  addEntry(opts) {
+    const nameBytes = Buf.from(opts.name);
+    const dosTime = opts.dosTime ?? 0, dosDate = opts.dosDate ?? 0x21;
+    const externalAttr = opts.externalAttr ?? 0;
+    const flags = 0x800;
+    let method, crc, compressedSize, uncompressedSize, payload;
+    if (opts.copyFrom) {
+      const { archive, entry } = opts.copyFrom;
+      method = entry.method; crc = entry.crc32;
+      compressedSize = entry.compressedSize; uncompressedSize = entry.uncompressedSize;
+      payload = archive.rawSlice(entry);
+    } else {
+      const data = opts.data;
+      uncompressedSize = data.length;
+      crc = crc32(data);
+      if (opts.compress === false || opts.alignment) {
+        method = METHOD_STORE; compressedSize = data.length; payload = data;
+      } else {
+        const def = opts.deflated ?? null;
+        if (def && def.length < data.length) { method = METHOD_DEFLATE; compressedSize = def.length; payload = def; }
+        else { method = METHOD_STORE; compressedSize = data.length; payload = data; }
+      }
+    }
+    if (opts.alignment && method !== METHOD_STORE) throw new Error(`${opts.name} 需要对齐但数据是压缩的`);
+    let extra = opts.extra ?? Buf.alloc(0);
+    let dataOffset = this.offset + 30 + nameBytes.length + extra.length;
+    if (opts.alignment) {
+      let pad = (opts.alignment - (dataOffset % opts.alignment)) % opts.alignment;
+      if (pad > 0 && pad < 4) pad += opts.alignment;
+      if (pad > 0) {
+        const ex = Buf.alloc(pad);
+        ex.writeUInt16LE(ALIGN_EXTRA_ID, 0);
+        ex.writeUInt16LE(pad - 4, 2);
+        extra = Buf.concat([extra, ex]);
+        dataOffset = this.offset + 30 + nameBytes.length + extra.length;
+      }
+    }
+    const lfh = Buf.alloc(30);
+    lfh.writeUInt32LE(LFH_SIG, 0); lfh.writeUInt16LE(20, 4); lfh.writeUInt16LE(flags, 6);
+    lfh.writeUInt16LE(method, 8); lfh.writeUInt16LE(dosTime, 10); lfh.writeUInt16LE(dosDate, 12);
+    lfh.writeUInt32LE(crc, 14); lfh.writeUInt32LE(compressedSize, 18); lfh.writeUInt32LE(uncompressedSize, 22);
+    lfh.writeUInt16LE(nameBytes.length, 26); lfh.writeUInt16LE(extra.length, 28);
+    const localHeaderOffset = this.offset;
+    this._write(lfh); this._write(nameBytes);
+    if (extra.length) this._write(extra);
+    if (opts.alignment && this.offset % opts.alignment !== 0) {
+      throw new Error(`对齐失败: ${opts.name} @${this.offset}`);
+    }
+    this._write(payload);
+    this.records.push({ nameBytes, flags, method, dosTime, dosDate, crc, compressedSize,
+                        uncompressedSize, localHeaderOffset, externalAttr });
+    return { offset: localHeaderOffset, dataOffset };
+  }
+  finalize() {
+    const cdOffset = this.offset;
+    for (const r of this.records) {
+      const cdh = Buf.alloc(46);
+      cdh.writeUInt32LE(CDH_SIG, 0); cdh.writeUInt16LE((3 << 8) | 20, 4); cdh.writeUInt16LE(20, 6);
+      cdh.writeUInt16LE(r.flags, 8); cdh.writeUInt16LE(r.method, 10);
+      cdh.writeUInt16LE(r.dosTime, 12); cdh.writeUInt16LE(r.dosDate, 14);
+      cdh.writeUInt32LE(r.crc, 16); cdh.writeUInt32LE(r.compressedSize, 20);
+      cdh.writeUInt32LE(r.uncompressedSize, 24); cdh.writeUInt16LE(r.nameBytes.length, 28);
+      cdh.writeUInt16LE(0, 30); cdh.writeUInt16LE(0, 32); cdh.writeUInt16LE(0, 34);
+      cdh.writeUInt16LE(0, 36); cdh.writeUInt32LE(r.externalAttr, 38);
+      cdh.writeUInt32LE(r.localHeaderOffset, 42);
+      this._write(cdh); this._write(r.nameBytes);
+    }
+    const cdSize = this.offset - cdOffset;
+    const count = this.records.length;
+    if (count > 0xffff || cdSize > 0xffffffff || cdOffset > 0xffffffff) {
+      throw new Error('条目过多或体积超过 4GB，暂不支持 ZIP64 输出');
+    }
+    const eocd = Buf.alloc(22);
+    eocd.writeUInt32LE(EOCD_SIG, 0);
+    eocd.writeUInt16LE(count, 8); eocd.writeUInt16LE(count, 10);
+    eocd.writeUInt32LE(cdSize, 12); eocd.writeUInt32LE(cdOffset, 16);
+    this._write(eocd);
+    return Buf.concat(this.chunks, this.offset);
+  }
+}
+
+const V1_SIG_RE = /^META-INF\/(MANIFEST\.MF|.*\.(SF|RSA|DSA|EC))$/i;
+function alignmentFor(name, method) {
+  if (method !== METHOD_STORE) return 0;
+  if (name.endsWith('.so')) return 16384;
+  return 4;
+}
+
+/* ============================================================================
+ * 2. resources.arsc 解析与回写
+ * ==========================================================================*/
+const RES_STRING_POOL_TYPE = 0x0001, RES_TABLE_TYPE = 0x0002;
+const RES_TABLE_PACKAGE_TYPE = 0x0200, RES_TABLE_TYPE_TYPE = 0x0201;
+const UTF8_FLAG = 1 << 8, SORTED_FLAG = 1;
+const FLAG_COMPLEX = 0x0001, FLAG_COMPACT = 0x0008;
+const TYPE_STRING = 0x03, NO_ENTRY = 0xffffffff;
+const TRANSLATABLE_TYPES = new Set(['string', 'array', 'plurals']);
+
+function decodeUtf8Len(buf, p) {
+  let v = buf[p++];
+  if (v & 0x80) v = ((v & 0x7f) << 8) | buf[p++];
+  return [v, p];
+}
+function decodeUtf16Len(buf, p) {
+  let v = buf.readUInt16LE(p); p += 2;
+  if (v & 0x8000) { v = ((v & 0x7fff) << 16) | buf.readUInt16LE(p); p += 2; }
+  return [v, p];
+}
+// AOSP 的 UTF-8 字符串池实际是 CESU-8：非 BMP 字符是两个 3 字节代理序列，
+// 必须按 UTF-16 码元处理，否则 emoji 会被破坏。
+function decodeCesu8(buf, start, end) {
+  const out = [];
+  let i = start;
+  while (i < end) {
+    const b0 = buf[i++];
+    if (b0 < 0x80) out.push(b0);
+    else if ((b0 & 0xe0) === 0xc0) out.push(((b0 & 0x1f) << 6) | (buf[i++] & 0x3f));
+    else if ((b0 & 0xf0) === 0xe0) out.push(((b0 & 0x0f) << 12) | ((buf[i++] & 0x3f) << 6) | (buf[i++] & 0x3f));
+    else if ((b0 & 0xf8) === 0xf0) {
+      const cp = ((b0 & 0x07) << 18) | ((buf[i++] & 0x3f) << 12) | ((buf[i++] & 0x3f) << 6) | (buf[i++] & 0x3f);
+      const v = cp - 0x10000;
+      out.push(0xd800 | (v >> 10), 0xdc00 | (v & 0x3ff));
+    } else out.push(0xfffd);
+  }
+  let s = '';
+  const CH = 4096;
+  for (let k = 0; k < out.length; k += CH) s += String.fromCharCode.apply(null, out.slice(k, k + CH));
+  return s;
+}
+function encodeCesu8(s) {
+  const out = Buf.allocUnsafe(Math.max(1, s.length * 3));
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) out[n++] = c;
+    else if (c < 0x800) { out[n++] = 0xc0 | (c >> 6); out[n++] = 0x80 | (c & 0x3f); }
+    else { out[n++] = 0xe0 | (c >> 12); out[n++] = 0x80 | ((c >> 6) & 0x3f); out[n++] = 0x80 | (c & 0x3f); }
+  }
+  return out.subarray(0, n);
+}
+function encodeUtf8Len(v) {
+  return v > 0x7f ? Buf.from([(v >> 8) | 0x80, v & 0xff]) : Buf.from([v]);
+}
+function encodeUtf16Len(v) {
+  const b = Buf.alloc(v > 0x7fff ? 4 : 2);
+  if (v > 0x7fff) { b.writeUInt16LE((v >> 16) | 0x8000, 0); b.writeUInt16LE(v & 0xffff, 2); }
+  else b.writeUInt16LE(v, 0);
+  return b;
+}
+function readPoolString(buf, pos, isUtf8) {
+  if (isUtf8) {
+    const [, p1] = decodeUtf8Len(buf, pos);
+    const [u8len, p2] = decodeUtf8Len(buf, p1);
+    return decodeCesu8(buf, p2, p2 + u8len);
+  }
+  const [len, p1] = decodeUtf16Len(buf, pos);
+  return decodeUtf16le(buf.subarray(p1, p1 + len * 2));
+}
+
+function parseStringPool(buf, off) {
+  const type = buf.readUInt16LE(off);
+  const headerSize = buf.readUInt16LE(off + 2);
+  const size = buf.readUInt32LE(off + 4);
+  if (type !== RES_STRING_POOL_TYPE) throw new Error(`不是字符串池 (0x${type.toString(16)})`);
+  const stringCount = buf.readUInt32LE(off + 8);
+  const styleCount = buf.readUInt32LE(off + 12);
+  const flags = buf.readUInt32LE(off + 16);
+  const stringsStart = buf.readUInt32LE(off + 20);
+  const stylesStart = buf.readUInt32LE(off + 24);
+  const isUtf8 = (flags & UTF8_FLAG) !== 0;
+  const offsets = new Uint32Array(stringCount);
+  for (let i = 0; i < stringCount; i++) offsets[i] = buf.readUInt32LE(off + headerSize + i * 4);
+  const styleOffsets = new Uint32Array(styleCount);
+  for (let i = 0; i < styleCount; i++) styleOffsets[i] = buf.readUInt32LE(off + headerSize + (stringCount + i) * 4);
+  const dataBase = off + stringsStart;
+  const strings = new Array(stringCount);
+  for (let i = 0; i < stringCount; i++) {
+    strings[i] = offsets[i] === NO_ENTRY ? '' : readPoolString(buf, dataBase + offsets[i], isUtf8);
+  }
+  let styleData = null;
+  if (styleCount > 0 && stylesStart > 0 && stylesStart < size) {
+    styleData = buf.subarray(off + stylesStart, off + size);
+  }
+  return { offset: off, headerSize, size, stringCount, styleCount, flags, isUtf8,
+           strings, offsets, styleOffsets, styleData, sorted: (flags & SORTED_FLAG) !== 0 };
+}
+
+function buildStringPool(pool, newStrings, opts = {}) {
+  const n = newStrings.length;
+  const sameCount = pool ? n === pool.stringCount : false;
+  if (pool && !sameCount && !opts.allowResize) throw new Error(`字符串数量必须不变: ${n} != ${pool.stringCount}`);
+  const isUtf8 = pool ? pool.isUtf8 : true;
+  const styleCount = sameCount && pool ? pool.styleCount : 0;
+  const styleData = sameCount && pool ? pool.styleData : null;
+  const headerSize = 28;
+  const stringsStart = headerSize + 4 * n + 4 * styleCount;
+  const chunks = [];
+  const offsets = new Uint32Array(n);
+  let dataLen = 0;
+  for (let i = 0; i < n; i++) {
+    const s = newStrings[i] ?? '';
+    let enc;
+    if (isUtf8) {
+      const bytes = encodeCesu8(s);
+      enc = Buf.concat([encodeUtf8Len(s.length), encodeUtf8Len(bytes.length), bytes, Buf.from([0])]);
+    } else {
+      const bytes = encodeUtf16le(s);
+      enc = Buf.concat([encodeUtf16Len(bytes.length / 2), bytes, Buf.from([0, 0])]);
+    }
+    offsets[i] = dataLen; chunks.push(enc); dataLen += enc.length;
+  }
+  let pad = (4 - (dataLen % 4)) % 4;
+  if (pad) { chunks.push(Buf.alloc(pad)); dataLen += pad; }
+  const stringData = Buf.concat(chunks, dataLen);
+  const stylePart = styleCount > 0 && styleData ? styleData : Buf.alloc(0);
+  const stylesStart = styleCount > 0 ? stringsStart + stringData.length : 0;
+  let flags = isUtf8 ? UTF8_FLAG : 0;
+  if (pool && pool.sorted && !newStrings.some((s, i) => s !== pool.strings[i])) flags |= SORTED_FLAG;
+  const total = stringsStart + stringData.length + stylePart.length;
+  const totalPadded = total + ((4 - (total % 4)) % 4);
+  const out = Buf.alloc(totalPadded);
+  out.writeUInt16LE(RES_STRING_POOL_TYPE, 0); out.writeUInt16LE(headerSize, 2);
+  out.writeUInt32LE(totalPadded, 4); out.writeUInt32LE(n, 8); out.writeUInt32LE(styleCount, 12);
+  out.writeUInt32LE(flags, 16); out.writeUInt32LE(stringsStart, 20); out.writeUInt32LE(stylesStart, 24);
+  for (let i = 0; i < n; i++) out.writeUInt32LE(offsets[i], headerSize + i * 4);
+  for (let i = 0; i < styleCount; i++) out.writeUInt32LE(pool.styleOffsets[i], headerSize + (n + i) * 4);
+  stringData.copy(out, stringsStart);
+  if (stylePart.length) stylePart.copy(out, stylesStart);
+  return out;
+}
+
+function configLocale(buf, off) {
+  const lang = buf.toString('latin1', off + 8, off + 10).replace(/\0/g, '');
+  const country = buf.toString('latin1', off + 10, off + 12).replace(/\0/g, '');
+  return { lang, country };
+}
+function isDefaultConfig(buf, off) {
+  const { lang, country } = configLocale(buf, off);
+  if (lang || country) return false;
+  return buf.readUInt16LE(off + 14) === 0 && buf.readUInt16LE(off + 24) === 0 &&
+         buf.readUInt16LE(off + 32) === 0 && buf.readUInt16LE(off + 34) === 0 &&
+         buf.readUInt16LE(off + 30) === 0;
+}
+
+function parseArsc(buf) {
+  if (buf.readUInt16LE(0) !== RES_TABLE_TYPE) throw new Error('不是 resources.arsc');
+  const tableHeaderSize = buf.readUInt16LE(2);
+  const tableSize = buf.readUInt32LE(4);
+  const packageCount = buf.readUInt32LE(8);
+  const globalPool = parseStringPool(buf, tableHeaderSize);
+  const packages = [];
+  let off = tableHeaderSize + globalPool.size;
+  while (off + 8 <= tableSize && packages.length < packageCount) {
+    const t = buf.readUInt16LE(off), size = buf.readUInt32LE(off + 4);
+    if (size <= 0 || off + size > buf.length) break;
+    if (t === RES_TABLE_PACKAGE_TYPE) packages.push(parsePackage(buf, off));
+    off += size; off += (4 - (off % 4)) % 4;
+  }
+  return { buf, tableHeaderSize, tableSize, packageCount, globalPool, packages,
+           tail: buf.subarray(tableHeaderSize + globalPool.size) };
+}
+
+function parsePackage(buf, off) {
+  const headerSize = buf.readUInt16LE(off + 2);
+  const size = buf.readUInt32LE(off + 4);
+  const id = buf.readUInt32LE(off + 8);
+  let nameEnd = off + 12;
+  while (nameEnd < off + 12 + 256 && buf.readUInt16LE(nameEnd) !== 0) nameEnd += 2;
+  const name = decodeUtf16le(buf.subarray(off + 12, nameEnd));
+  const typeStringsOff = buf.readUInt32LE(off + 268);
+  const keyStringsOff = buf.readUInt32LE(off + 276);
+  const typePool = typeStringsOff ? parseStringPool(buf, off + typeStringsOff) : null;
+  const keyPool = keyStringsOff ? parseStringPool(buf, off + keyStringsOff) : null;
+  const types = [];
+  let p = off + headerSize;
+  while (p + 8 <= off + size) {
+    const t = buf.readUInt16LE(p), sz = buf.readUInt32LE(p + 4);
+    if (sz <= 0 || p + sz > off + size) break;
+    if (t === RES_TABLE_TYPE_TYPE) types.push(parseType(buf, p, typePool, keyPool));
+    p += sz; p += (4 - (p % 4)) % 4;
+  }
+  return { offset: off, size, id, name, typePool, keyPool, types };
+}
+
+function parseType(buf, off, typePool, keyPool) {
+  const headerSize = buf.readUInt16LE(off + 2);
+  const size = buf.readUInt32LE(off + 4);
+  const id = buf[off + 8];
+  const flags = buf[off + 9];
+  const entryCount = buf.readUInt32LE(off + 12);
+  const entriesStart = buf.readUInt32LE(off + 16);
+  const configOff = off + 20;
+  const { lang, country } = configLocale(buf, configOff);
+  // AOSP: typeStrings.string8ObjectAt(typeSpec->id - 1)，类型 ID 从 1 开始
+  const typeName = typePool && id - 1 < typePool.stringCount ? typePool.strings[id - 1] : `type${id}`;
+  const isSparse = (flags & 0x01) !== 0, isOffset16 = (flags & 0x02) !== 0;
+  const entries = [];
+  const base = off + entriesStart, idxBase = off + headerSize;
+  const readEntryAt = (entryIndex, entryOffset) => {
+    const eo = base + entryOffset;
+    if (eo + 8 > off + size) return null;
+    const rawFlags = buf.readUInt16LE(eo + 2);
+    let keyIndex, value = null, complex = null;
+    if (rawFlags & FLAG_COMPACT) {
+      keyIndex = buf.readUInt16LE(eo);
+      value = { dataType: rawFlags >> 8, data: buf.readUInt32LE(eo + 4) };
+    } else {
+      const entrySize = buf.readUInt16LE(eo);
+      keyIndex = buf.readUInt32LE(eo + 4);
+      if (rawFlags & FLAG_COMPLEX) {
+        const parent = buf.readUInt32LE(eo + 8);
+        const count = buf.readUInt32LE(eo + 12);
+        const maps = [];
+        for (let m = 0; m < count; m++) {
+          const mo = eo + 16 + m * 12;
+          if (mo + 12 > off + size) break;
+          maps.push({ name: buf.readUInt32LE(mo), dataType: buf[mo + 7], data: buf.readUInt32LE(mo + 8) });
+        }
+        complex = { parent, maps };
+      } else {
+        const vo = eo + entrySize;
+        value = { dataType: buf[vo + 3], data: buf.readUInt32LE(vo + 4) };
+      }
+    }
+    return { entryIndex, offset: entryOffset,
+             key: keyPool && keyIndex < keyPool.stringCount ? keyPool.strings[keyIndex] : null,
+             value, complex };
+  };
+  if (isSparse) {
+    for (let i = 0; i < entryCount; i++) {
+      const so = idxBase + i * 4;
+      if (so + 4 > off + size) break;
+      const e = readEntryAt(buf.readUInt16LE(so), buf.readUInt16LE(so + 2) * 4);
+      if (e) entries.push(e);
+    }
+  } else {
+    for (let i = 0; i < entryCount; i++) {
+      let entryOffset;
+      if (isOffset16) {
+        const v = buf.readUInt16LE(idxBase + i * 2);
+        entryOffset = v === 0xffff ? NO_ENTRY : v * 4;
+      } else entryOffset = buf.readUInt32LE(idxBase + i * 4);
+      if (entryOffset === NO_ENTRY) continue;
+      const e = readEntryAt(i, entryOffset);
+      if (e) entries.push(e);
+    }
+  }
+  return { offset: off, size, id, flags, entryCount, entriesStart, typeName,
+           config: { lang, country, isDefault: isDefaultConfig(buf, configOff) },
+           isSparse, isOffset16, entries };
+}
+
+const HAN_RE = /[\u3400-\u9fff\uf900-\ufaff]/;
+const KANA_RE = /[\u3040-\u30ff]/;
+const HANGUL_RE = /[\uac00-\ud7af]/;
+
+function looksTechnical(s, opts = {}) {
+  if (!s) return true;
+  if (!/\p{L}/u.test(s)) return true;
+  if (/^res\//.test(s)) return true;
+  if (/\.(png|jpg|jpeg|webp|gif|xml|json|ttf|otf|so|db|mp3|mp4|9\.png)$/i.test(s)) return true;
+  if (/^(https?|ftp|mailto|tel|content|file):/i.test(s) && !/\s/.test(s)) return true;
+  if (/^[\x20-\x7e]*$/.test(s)) {
+    if (/[\\/]/.test(s)) return true;
+    if (/^[A-Za-z0-9_.%$#@+?=&:-]+$/.test(s) && /[_.]/.test(s)) return true;
+    if (/^[A-Z0-9_]+$/.test(s) && s.length > 1) return true;
+    if (opts.strictAscii && !/\s/.test(s)) return true;
+  }
+  return false;
+}
+
+function autoIncludeConfig(config, texts, sourceLang) {
+  const src = String(sourceLang || 'zh').toLowerCase().slice(0, 2);
+  const meaningful = texts.filter((t) => t && /\p{L}/u.test(t));
+  if (meaningful.length === 0) return false;
+  const n = meaningful.length;
+  const ratio = (re) => meaningful.filter((t) => re.test(t)).length / n;
+  const han = ratio(HAN_RE), kana = ratio(KANA_RE), hangul = ratio(HANGUL_RE);
+  if (config.lang) return config.lang === src;
+  if (src === 'zh') return han >= 0.2 && kana < 0.1;
+  if (src === 'ja') return kana + han >= 0.2;
+  if (src === 'ko') return hangul >= 0.2;
+  return han + kana + hangul < 0.2;
+}
+
+function extractCandidates(arsc, opts = {}) {
+  const sourceLang = opts.sourceLang ?? 'zh';
+  const explicit = opts.includeLocales;
+  const protectedIndices = new Set();
+  const raw = [];
+  const configs = [];
+  for (const pkg of arsc.packages) {
+    for (const type of pkg.types) {
+      const translatable = TRANSLATABLE_TYPES.has(type.typeName);
+      const values = [];
+      for (const entry of type.entries) {
+        if (entry.value && entry.value.dataType === TYPE_STRING) values.push({ v: entry.value, entry });
+        if (entry.complex) for (const m of entry.complex.maps) if (m.dataType === TYPE_STRING) values.push({ v: m, entry });
+      }
+      let include = false;
+      if (translatable) {
+        if (explicit) include = explicit.includes(type.config.lang);
+        else include = autoIncludeConfig(type.config, values.map((x) => arsc.globalPool.strings[x.v.data] ?? ''), sourceLang);
+        configs.push({ pkg: pkg.name, typeName: type.typeName, lang: type.config.lang,
+                       country: type.config.country, entryCount: values.length, included: include });
+      }
+      for (const { v, entry } of values) {
+        if (!include) { protectedIndices.add(v.data); continue; }
+        raw.push({ index: v.data, text: arsc.globalPool.strings[v.data] ?? '', key: entry.key,
+                   typeName: type.typeName, lang: type.config.lang, pkg: pkg.name });
+      }
+    }
+  }
+  const src = String(sourceLang).toLowerCase().slice(0, 2);
+  const strictAscii = opts.strictAscii ?? (src === 'zh' || src === 'ja' || src === 'ko');
+  const candidates = [];
+  for (const c of raw) {
+    if (looksTechnical(c.text, { strictAscii })) { protectedIndices.add(c.index); continue; }
+    candidates.push(c);
+  }
+  return { candidates, protectedIndices, strictAscii, configs };
+}
+
+function uniqueStrings(candidates, protectedIndices) {
+  const byIndex = new Map();
+  for (const c of candidates) {
+    if (protectedIndices.has(c.index)) continue;
+    if (!byIndex.has(c.index)) byIndex.set(c.index, { index: c.index, text: c.text, refs: [] });
+    byIndex.get(c.index).refs.push({ key: c.key, typeName: c.typeName, lang: c.lang });
+  }
+  return [...byIndex.values()].sort((a, b) => a.index - b.index);
+}
+
+function rebuildArsc(arsc, translations) {
+  const strings = arsc.globalPool.strings.slice();
+  let changed = 0;
+  for (const [idx, text] of translations) {
+    if (idx < 0 || idx >= strings.length) continue;
+    if (typeof text !== 'string') continue;
+    if (strings[idx] !== text) { strings[idx] = text; changed++; }
+  }
+  const newPool = buildStringPool(arsc.globalPool, strings);
+  const tableHeader = Buf.from(arsc.buf.subarray(0, arsc.tableHeaderSize));
+  const total = arsc.tableHeaderSize + newPool.length + arsc.tail.length;
+  tableHeader.writeUInt32LE(total, 4);
+  return { buf: Buf.concat([tableHeader, newPool, arsc.tail], total), changed };
+}
+
+/* ============================================================================
+ * 3. 二进制 XML (AXML)
+ * ==========================================================================*/
+const RES_XML_TYPE = 0x0003, RES_XML_RESOURCE_MAP_TYPE = 0x0180;
+const RES_XML_START_ELEMENT_TYPE = 0x0102, RES_XML_END_ELEMENT_TYPE = 0x0103;
+const RES_XML_CDATA_TYPE = 0x0104;
+const AXML_VISIBLE_ATTRS = /^(text|hint|title|summary|contentDescription|label|subtitle|message|description)$/i;
+
+function chunkHeader(buf, off) {
+  return { type: buf.readUInt16LE(off), headerSize: buf.readUInt16LE(off + 2), size: buf.readUInt32LE(off + 4) };
+}
+
+function parseAxml(buf) {
+  const root = chunkHeader(buf, 0);
+  if (root.type !== RES_XML_TYPE) throw new Error('不是二进制 XML');
+  let pool = null, poolEnd = 0, resourceMap = null;
+  let p = root.headerSize;
+  while (p + 8 <= root.size) {
+    const c = chunkHeader(buf, p);
+    if (c.type === RES_STRING_POOL_TYPE) { pool = parseStringPool(buf, p); poolEnd = p + c.size; }
+    else if (c.type === RES_XML_RESOURCE_MAP_TYPE) {
+      const ids = [];
+      for (let q = p + c.headerSize; q + 4 <= p + c.size; q += 4) ids.push(buf.readUInt32LE(q));
+      resourceMap = ids;
+    } else break;
+    p += c.size;
+  }
+  if (!pool) throw new Error('AXML 缺少字符串池');
+  const nodes = [];
+  while (p + 8 <= buf.length) {
+    const c = chunkHeader(buf, p);
+    if (c.size === 0) break;
+    const node = { type: c.type, offset: p, size: c.size };
+    if (c.type === RES_XML_START_ELEMENT_TYPE) {
+      node.lineNumber = buf.readUInt32LE(p + 8);
+      node.nsIndex = buf.readUInt32LE(p + 16);
+      node.nameIndex = buf.readUInt32LE(p + 20);
+      const attributeStart = buf.readUInt16LE(p + 24);
+      const attributeSize = buf.readUInt16LE(p + 26);
+      const attributeCount = buf.readUInt16LE(p + 28);
+      node.attributes = [];
+      for (let i = 0; i < attributeCount; i++) {
+        const ao = p + 16 + attributeStart + i * attributeSize;
+        node.attributes.push({
+          nsIndex: buf.readUInt32LE(ao), nameIndex: buf.readUInt32LE(ao + 4),
+          rawValueIndex: buf.readUInt32LE(ao + 8), valueType: buf[ao + 15],
+          valueData: buf.readUInt32LE(ao + 16), offset: ao,
+        });
+      }
+    } else if (c.type === RES_XML_END_ELEMENT_TYPE) {
+      node.nsIndex = buf.readUInt32LE(p + 16); node.nameIndex = buf.readUInt32LE(p + 20);
+    } else if (c.type === RES_XML_CDATA_TYPE) {
+      node.dataIndex = buf.readUInt32LE(p + 16);
+    }
+    nodes.push(node);
+    p += c.size; p += (4 - (p % 4)) % 4;
+  }
+  return { buf, root, pool, poolEnd, resourceMap, nodes };
+}
+
+function axmlName(xml, index) {
+  if (index === 0xffffffff || index >= xml.pool.stringCount) return null;
+  return xml.pool.strings[index];
+}
+function rewriteAxmlWithPool(xml, newPool) {
+  const head = Buf.from(xml.buf.subarray(0, xml.root.headerSize));
+  const tail = xml.buf.subarray(xml.poolEnd);
+  const total = xml.root.headerSize + newPool.length + tail.length;
+  head.writeUInt32LE(total, 4);
+  return Buf.concat([head, newPool, tail], total);
+}
+function readPackageName(buf) {
+  const xml = parseAxml(buf);
+  for (const node of xml.nodes) {
+    if (node.type !== RES_XML_START_ELEMENT_TYPE) continue;
+    if (axmlName(xml, node.nameIndex) !== 'manifest') continue;
+    for (const a of node.attributes) {
+      if (axmlName(xml, a.nameIndex) === 'package') return axmlName(xml, a.rawValueIndex) ?? axmlName(xml, a.valueData);
+    }
+  }
+  return null;
+}
+function setPackageName(buf, newName) {
+  const xml = parseAxml(buf);
+  let oldName = null, target = null;
+  for (const node of xml.nodes) {
+    if (node.type !== RES_XML_START_ELEMENT_TYPE) continue;
+    if (axmlName(xml, node.nameIndex) !== 'manifest') continue;
+    for (const a of node.attributes) {
+      if (axmlName(xml, a.nameIndex) === 'package') {
+        target = a; oldName = axmlName(xml, a.rawValueIndex) ?? axmlName(xml, a.valueData);
+      }
+    }
+  }
+  if (!target) throw new Error('未找到 manifest/package 属性');
+  // 连带更新自定义权限名、provider authority 等以旧包名为前缀的字符串
+  const strings = xml.pool.strings.map((t) =>
+    (oldName && t && t !== oldName && t.startsWith(oldName + '.')) ? newName + t.slice(oldName.length) : t);
+  let newIndex = strings.indexOf(newName);
+  if (newIndex < 0) { strings.push(newName); newIndex = strings.length - 1; }
+  const newPool = buildStringPool(xml.pool, strings, { allowResize: true });
+  const out = rewriteAxmlWithPool(xml, newPool);
+  const delta = newPool.length - (xml.poolEnd - xml.root.headerSize);
+  out.writeUInt32LE(newIndex, target.offset + delta + 8);
+  return out;
+}
+function extractHardcodedStrings(buf) {
+  const xml = parseAxml(buf);
+  const out = [];
+  for (const node of xml.nodes) {
+    if (node.type !== RES_XML_START_ELEMENT_TYPE) continue;
+    const nodeName = axmlName(xml, node.nameIndex);
+    for (const a of node.attributes) {
+      const attrName = axmlName(xml, a.nameIndex);
+      let idx = -1;
+      if (a.rawValueIndex !== 0xffffffff && a.valueType === TYPE_STRING) idx = a.rawValueIndex;
+      else if (a.rawValueIndex === 0xffffffff && a.valueType === TYPE_STRING) idx = a.valueData;
+      if (idx >= 0) {
+        const text = axmlName(xml, idx);
+        if (text) out.push({ nodeName, attrName, poolIndex: idx, text });
+      }
+    }
+  }
+  return out;
+}
+function translateAxmlBuf(buf, translations) {
+  const xml = parseAxml(buf);
+  const strings = xml.pool.strings.slice();
+  let changed = 0;
+  for (const [idx, text] of translations) {
+    if (idx >= 0 && idx < strings.length && typeof text === 'string' && strings[idx] !== text) {
+      strings[idx] = text; changed++;
+    }
+  }
+  if (changed === 0) return { buf, changed: 0 };
+  return { buf: rewriteAxmlWithPool(xml, buildStringPool(xml.pool, strings)), changed };
+}
+
+/* ============================================================================
+ * 4. DER / X.509 自签证书（WebCrypto）
+ * ==========================================================================*/
+function derLen(n) {
+  if (n < 0x80) return Buf.from([n]);
+  const bytes = [];
+  let v = n;
+  while (v > 0) { bytes.unshift(v & 0xff); v = Math.floor(v / 256); }
+  return Buf.from([0x80 | bytes.length, ...bytes]);
+}
+function tlv(tag, content) { return Buf.concat([Buf.from([tag]), derLen(content.length), content]); }
+const derSeq = (...i) => tlv(0x30, Buf.concat(i));
+const derSet = (...i) => tlv(0x31, Buf.concat(i));
+const derExplicit = (n, c) => tlv(0xa0 | n, c);
+const derUtf8 = (s) => tlv(0x0c, Buf.from(s));
+const derOctet = (b) => tlv(0x04, b);
+const derNull = () => Buf.from([0x05, 0x00]);
+const derBool = (b) => tlv(0x01, Buf.from([b ? 0xff : 0x00]));
+const derBitString = (b, unused = 0) => tlv(0x03, Buf.concat([Buf.from([unused]), b]));
+function derInt(value) {
+  let v = typeof value === 'bigint' ? value : BigInt(value);
+  const bytes = [];
+  if (v === 0n) bytes.push(0);
+  while (v > 0n) { bytes.unshift(Number(v & 0xffn)); v >>= 8n; }
+  if (bytes[0] & 0x80) bytes.unshift(0);
+  return tlv(0x02, Buf.from(bytes));
+}
+function derOid(str) {
+  const parts = str.split('.').map(Number);
+  const bytes = [40 * parts[0] + parts[1]];
+  for (const p of parts.slice(2)) {
+    const stack = [p & 0x7f];
+    let v = p >>> 7;
+    while (v > 0) { stack.unshift((v & 0x7f) | 0x80); v >>>= 7; }
+    bytes.push(...stack);
+  }
+  return tlv(0x06, Buf.from(bytes));
+}
+function derUtcTime(date) {
+  const p = (n, w = 2) => String(n).padStart(w, '0');
+  return tlv(0x17, Buf.from(p(date.getUTCFullYear() % 100) + p(date.getUTCMonth() + 1) +
+    p(date.getUTCDate()) + p(date.getUTCHours()) + p(date.getUTCMinutes()) + p(date.getUTCSeconds()) + 'Z'));
+}
+
+const OID_SHA256_RSA = '1.2.840.113549.1.1.11';
+const OID_CN = '2.5.4.3';
+const OID_BASIC_CONSTRAINTS = '2.5.29.19';
+const OID_KEY_USAGE = '2.5.29.15';
+
+async function createSelfSignedCertificate(privateKey, opts = {}) {
+  const cn = opts.commonName ?? 'APK i18n Web';
+  const days = opts.days ?? 3650;
+  const spki = Buf.from(await crypto.subtle.exportKey('spki', opts.publicKey));
+  const sigAlg = derSeq(derOid(OID_SHA256_RSA), derNull());
+  const name = derSeq(derSet(derSeq(derOid(OID_CN), derUtf8(cn))));
+  const now = new Date(Date.now() - 24 * 3600 * 1000);
+  const notAfter = new Date(now.getTime() + days * 24 * 3600 * 1000);
+  const serialBytes = new Uint8Array(8);
+  crypto.getRandomValues(serialBytes);
+  let serial = 0n;
+  for (const b of serialBytes) serial = (serial << 8n) | BigInt(b);
+  if (serial === 0n) serial = 1n;
+  const extensions = derExplicit(3, derSeq(
+    derSeq(derOid(OID_BASIC_CONSTRAINTS), derBool(true), derOctet(derSeq(derBool(true)))),
+    derSeq(derOid(OID_KEY_USAGE), derBool(true), derOctet(derBitString(Buf.from([0x80])))),
+  ));
+  const tbs = derSeq(
+    derExplicit(0, derInt(2n)), derInt(serial), sigAlg, name,
+    derSeq(derUtcTime(now), derUtcTime(notAfter)), name, spki, extensions,
+  );
+  const sig = Buf.from(await crypto.subtle.sign({ name: 'RSASSA-PKCS1-v1_5' }, privateKey, tbs));
+  return derSeq(tbs, sigAlg, derBitString(sig));
+}
+
+/* ============================================================================
+ * 5. APK Signature Scheme v2（WebCrypto）
+ * ==========================================================================*/
+const CHUNK_SIZE = 1024 * 1024;
+const APK_SIGNING_BLOCK_MAGIC = Buf.from('APK Sig Block 42');
+const V2_BLOCK_ID = 0x7109871a;
+const SIG_ALG = { id: 0x0103, hash: 'SHA-256', digestSize: 32, subtle: 'RSASSA-PKCS1-v1_5' };
+
+function u32b(n) { const b = Buf.alloc(4); b.writeUInt32LE(n); return b; }
+function u64b(n) { const b = Buf.alloc(8); b.writeBigUInt64LE(n); return b; }
+function lenPrefixed(...bufs) { return Buf.concat(bufs.map((b) => Buf.concat([u32b(b.length), b]))); }
+function pairsOfIntAndBytes(pairs) {
+  return Buf.concat(pairs.map(([id, bytes]) =>
+    Buf.concat([u32b(8 + bytes.length), u32b(id), u32b(bytes.length), bytes])));
+}
+
+async function shaDigest(hashName, bytes) {
+  return Buf.from(await crypto.subtle.digest(hashName, bytes));
+}
+
+/** 分块内容摘要：每块 0xa5 前缀，最后 0x5a 汇总（对照 AOSP computeContentDigests） */
+async function computeChunkedDigest(parts, hashName, digestSize) {
+  let chunkCount = 0;
+  for (const p of parts) chunkCount += Math.ceil(p.size / CHUNK_SIZE);
+  const concat = Buf.alloc(5 + chunkCount * digestSize);
+  concat[0] = 0x5a;
+  concat.writeUInt32LE(chunkCount, 1);
+  const prefix = Buf.alloc(5);
+  prefix[0] = 0xa5;
+  let idx = 0;
+  for (const part of parts) {
+    let offset = 0, remaining = part.size;
+    while (remaining > 0) {
+      const len = Math.min(remaining, CHUNK_SIZE);
+      prefix.writeUInt32LE(len, 1);
+      // 注意：各段的 slice(o, n) 约定为「起点 + 长度」，与 Node 版一致
+      const chunk = part.slice(offset, len);
+      const d = await shaDigest(hashName, Buf.concat([prefix, chunk]));
+      d.copy(concat, 5 + idx * digestSize);
+      idx++; offset += len; remaining -= len;
+    }
+  }
+  return shaDigest(hashName, concat);
+}
+
+const SIG_ALG_BY_ID = new Map([[SIG_ALG.id, SIG_ALG]]);
+
+async function signApkV2(inBuf, keys) {
+  const zip = openZip(inBuf);
+  const { cdOffset, cdSize, eocdOffset } = zip;
+  if (zip.entries.length > 0xffff || cdOffset > 0xffffffff) throw new Error('暂不支持 ZIP64 结构的签名');
+  const eocdLen = 22 + inBuf.readUInt16LE(eocdOffset + 20);
+  const eocd = inBuf.subarray(eocdOffset, eocdOffset + eocdLen);
+  const eocdForDigest = Buf.from(eocd);
+  eocdForDigest.writeUInt32LE(cdOffset, 16);
+
+  const contentDigest = await computeChunkedDigest([
+    { size: cdOffset, slice: (o, n) => inBuf.subarray(o, o + n) },
+    { size: cdSize, slice: (o, n) => inBuf.subarray(cdOffset + o, cdOffset + o + n) },
+    { size: eocdForDigest.length, slice: (o, n) => eocdForDigest.subarray(o, o + n) },
+  ], SIG_ALG.hash, SIG_ALG.digestSize);
+
+  const publicKeyDer = Buf.from(await crypto.subtle.exportKey('spki', keys.publicKey));
+  const signedData = lenPrefixed(
+    pairsOfIntAndBytes([[SIG_ALG.id, contentDigest]]),
+    lenPrefixed(keys.certificate),
+    Buf.alloc(0),
+  );
+  const signature = Buf.from(await crypto.subtle.sign({ name: SIG_ALG.subtle }, keys.privateKey, signedData));
+  const ok = await crypto.subtle.verify({ name: SIG_ALG.subtle }, keys.publicKey, signature, signedData);
+  if (!ok) throw new Error('v2 签名自检失败');
+
+  const signerBlock = lenPrefixed(signedData, pairsOfIntAndBytes([[SIG_ALG.id, signature]]), publicKeyDer);
+  const v2Block = lenPrefixed(lenPrefixed(signerBlock));
+  // 布局: [u64 size][u64 pairLen][u32 id][v2Block][u64 size][16 magic]
+  // size 字段的值 = 总长 - 8 = (44 + v2Block.length) - 8
+  const blockSize = 36 + v2Block.length;
+  const signingBlock = Buf.concat([
+    u64b(blockSize), u64b(4 + v2Block.length), u32b(V2_BLOCK_ID), v2Block, u64b(blockSize), APK_SIGNING_BLOCK_MAGIC,
+  ]);
+
+  const eocdForOutput = Buf.from(eocd);
+  eocdForOutput.writeUInt32LE(cdOffset + signingBlock.length, 16);
+  return {
+    buf: Buf.concat([inBuf.subarray(0, cdOffset), signingBlock,
+                     inBuf.subarray(cdOffset, eocdOffset), eocdForOutput]),
+    signingBlockSize: signingBlock.length,
+  };
+}
+
+async function verifyApkV2(inBuf) {
+  const zip = openZip(inBuf);
+  const { cdOffset } = zip;
+  const errors = [];
+  if (cdOffset < 32 || !inBuf.subarray(cdOffset - 16, cdOffset).equals(APK_SIGNING_BLOCK_MAGIC)) {
+    return { present: false, valid: false, errors: ['未找到 APK 签名块'], certs: [], signerCount: 0 };
+  }
+  const blockSize = Number(inBuf.readBigUInt64LE(cdOffset - 24));
+  const blockStart = cdOffset - blockSize - 8;
+  if (Number(inBuf.readBigUInt64LE(blockStart)) !== blockSize) errors.push('签名块长度字段不一致');
+  const pairsBuf = inBuf.subarray(blockStart + 8, cdOffset - 24);
+  let p = 0, v2 = null;
+  while (p + 8 <= pairsBuf.length) {
+    const pairSize = Number(pairsBuf.readBigUInt64LE(p));
+    const id = pairsBuf.readUInt32LE(p + 8);
+    if (id === V2_BLOCK_ID) v2 = pairsBuf.subarray(p + 12, p + 8 + pairSize);
+    p += 8 + pairSize;
+  }
+  if (!v2) return { present: false, valid: false, errors: ['未找到 v2 签名块'], certs: [], signerCount: 0 };
+  const readLP = (b, at) => { const len = b.readUInt32LE(at); return [b.subarray(at + 4, at + 4 + len), at + 4 + len]; };
+  const [signersSeq] = readLP(v2, 0);
+  const signers = [];
+  let sp = 0;
+  while (sp < signersSeq.length) { const [sb, np] = readLP(signersSeq, sp); signers.push(sb); sp = np; }
+  const certs = [];
+  for (const sb of signers) {
+    const [signedData] = readLP(sb, 0);
+    let q = 4 + signedData.length;
+    const [signaturesSeq] = readLP(sb, q);
+    q += 4 + signaturesSeq.length;
+    const [publicKeyDer] = readLP(sb, q);
+    const [digestsSeq, afterD] = readLP(signedData, 0);
+    const [certsSeq] = readLP(signedData, afterD);
+    let cp = 0;
+    while (cp < certsSeq.length) { const [c, nc] = readLP(certsSeq, cp); certs.push(c); cp = nc; }
+    const parsePairs = (b) => {
+      const out = []; let at = 0;
+      while (at + 12 <= b.length) {
+        const outer = b.readUInt32LE(at), id = b.readUInt32LE(at + 4), len = b.readUInt32LE(at + 8);
+        out.push({ id, bytes: b.subarray(at + 12, at + 12 + len) }); at += 4 + outer;
+      }
+      return out;
+    };
+    const key = await crypto.subtle.importKey('spki', publicKeyDer, { name: SIG_ALG.subtle, hash: 'SHA-256' }, false, ['verify']);
+    for (const sig of parsePairs(signaturesSeq)) {
+      const ok = await crypto.subtle.verify({ name: SIG_ALG.subtle }, key, sig.bytes, signedData);
+      if (!ok) errors.push('签名校验失败');
+    }
+    const eocdLen = 22 + inBuf.readUInt16LE(zip.eocdOffset + 20);
+    const eocdForDigest = Buf.from(inBuf.subarray(zip.eocdOffset, zip.eocdOffset + eocdLen));
+    eocdForDigest.writeUInt32LE(blockStart, 16);
+    for (const d of parsePairs(digestsSeq)) {
+      const actual = await computeChunkedDigest([
+        { size: blockStart, slice: (o, n) => inBuf.subarray(o, o + n) },
+        { size: zip.cdSize, slice: (o, n) => inBuf.subarray(zip.cdOffset + o, zip.cdOffset + o + n) },
+        { size: eocdForDigest.length, slice: (o, n) => eocdForDigest.subarray(o, o + n) },
+      ], SIG_ALG.hash, SIG_ALG.digestSize);
+      if (!actual.equals(d.bytes)) errors.push('内容摘要不匹配');
+    }
+  }
+  return { present: true, valid: errors.length === 0, errors, certs, signerCount: signers.length };
+}
+
+/* ---- 密钥持久化（localStorage，只存本机） ---- */
+const KEY_STORE = 'apk-i18n-signing-key';
+async function loadOrCreateKeys(onCreate) {
+  const saved = safeStore.get(KEY_STORE);
+  if (saved) {
+    const j = JSON.parse(saved);
+    const privateKey = await crypto.subtle.importKey('jwk', j.privateJwk,
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, true, ['sign']);
+    const publicKey = await crypto.subtle.importKey('jwk', j.publicJwk,
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, true, ['verify']);
+    return { privateKey, publicKey, certificate: Buf.from(j.certB64, 'base64'), created: false };
+  }
+  const kp = await crypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true, ['sign', 'verify']);
+  const certificate = await createSelfSignedCertificate(kp.privateKey, { publicKey: kp.publicKey, commonName: 'APK i18n Web Key' });
+  const j = {
+    privateJwk: await crypto.subtle.exportKey('jwk', kp.privateKey),
+    publicJwk: await crypto.subtle.exportKey('jwk', kp.publicKey),
+    certB64: btoa(String.fromCharCode(...certificate)),
+  };
+  if (!safeStore.set(KEY_STORE, JSON.stringify(j))) onCreate?.();
+  return { privateKey: kp.privateKey, publicKey: kp.publicKey, certificate, created: true };
+}
+
+/* ============================================================================
+ * 6. 翻译质量护栏 + AI 引擎
+ * ==========================================================================*/
+const PLACEHOLDER_RE = /%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[a-zA-Z%]|\{[^{}]*\}|<\/?[a-zA-Z][^>]*>|&[a-zA-Z#0-9]+;/g;
+const placeholders = (s) => (s.match(PLACEHOLDER_RE) ?? []).map((x) => x.replace(/\s+/g, ' ')).sort();
+function samePlaceholders(a, b) {
+  const pa = placeholders(a), pb = placeholders(b);
+  return pa.length === pb.length && pa.every((x, i) => x === pb[i]);
+}
+function validateTranslation(src, dst) {
+  if (typeof dst !== 'string') return { ok: false, reason: '译文不是字符串' };
+  if (dst.trim() === '' && src.trim() !== '') return { ok: false, reason: '译文为空' };
+  if (!samePlaceholders(src, dst)) return { ok: false, reason: '占位符不一致' };
+  if (src.match(/^\s*/)[0] !== dst.match(/^\s*/)[0] || src.match(/\s*$/)[0] !== dst.match(/\s*$/)[0]) {
+    return { ok: false, reason: '首尾空白不一致' };
+  }
+  if ((src.match(/\n/g) ?? []).length !== (dst.match(/\n/g) ?? []).length) return { ok: false, reason: '换行数量不一致' };
+  return { ok: true };
+}
+function extractJson(text) {
+  let t = String(text).trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) t = fence[1].trim();
+  const first = t.search(/[[{]/);
+  if (first < 0) throw new Error('模型输出中没有 JSON');
+  t = t.slice(first);
+  const end = Math.max(t.lastIndexOf(']'), t.lastIndexOf('}'));
+  if (end >= 0) t = t.slice(0, end + 1);
+  return JSON.parse(t);
+}
+
+const LANG_LABEL = { zh:'中文', en:'英文', ja:'日文', ko:'韩文', fr:'法文', de:'德文', es:'西班牙文' };
+const langLabel = (c) => LANG_LABEL[c] ?? c;
+
+async function aiTranslateBatch(batch, cfg) {
+  const body = {
+    model: cfg.model, temperature: 0,
+    messages: [
+      { role: 'system', content:
+`你是专业的手机应用本地化翻译引擎。把界面文案从${langLabel(cfg.from)}翻译成${langLabel(cfg.to)}。
+
+严格要求：
+1. 只输出一个 JSON 数组，元素顺序和数量必须与输入完全一致，不要输出任何解释。
+2. 必须原样保留所有占位符与标记，例如 %s、%1$s、%d、%%、{0}、\\n、<b>、</b>、&amp;。
+3. 不要改动 URL、邮箱、包名、品牌名、代码标识符，直接原样返回。
+4. 译文要简短自然，符合手机界面习惯；不要添加句号等原文没有的标点。
+5. 输入是 JSON 数组，输出也必须是等长的 JSON 数组。` },
+      { role: 'user', content: JSON.stringify(batch) },
+    ],
+  };
+  const res = await fetch(`${cfg.base.replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.key}` },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+  const data = JSON.parse(text);
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') throw new Error('响应缺少 content');
+  const arr = extractJson(content);
+  if (!Array.isArray(arr) || arr.length !== batch.length) throw new Error(`返回数组长度不符: ${arr.length} != ${batch.length}`);
+  return arr;
+}
+
+async function aiTranslate(items, cfg, log, onProgress) {
+  const batchSize = 25;
+  const batches = [];
+  for (let i = 0; i < items.length; i += batchSize) batches.push({ offset: i, batch: items.slice(i, i + batchSize) });
+  let okCount = 0, failCount = 0, doneItems = 0;
+  await mapPool(batches, 3, async (b) => {
+    let result = null, lastErr = null;
+    for (let attempt = 0; attempt < 3 && !result; attempt++) {
+      try { result = await aiTranslateBatch(b.batch.map((x) => x.text), cfg); }
+      catch (e) { lastErr = e; if (attempt < 2) await new Promise((r) => setTimeout(r, 800 * (attempt + 1))); }
+    }
+    if (!result) {
+      log(`批次 ${b.offset}~${b.offset + b.batch.length - 1} 失败，保留原文：${lastErr?.message}`, 'warn');
+      failCount += b.batch.length;
+      doneItems += b.batch.length;
+      onProgress?.(Math.min(doneItems, items.length), items.length);
+      return;
+    }
+    for (let k = 0; k < b.batch.length; k++) {
+      const it = b.batch[k];
+      const v = validateTranslation(it.text, result[k]);
+      if (v.ok) { it.translation = result[k]; okCount++; }
+      else { failCount++; log(`第 ${b.offset + k} 条校验失败(${v.reason})，保留原文`, 'warn'); }
+    }
+    doneItems += b.batch.length;
+    onProgress?.(Math.min(doneItems, items.length), items.length);
+  });
+  return { okCount, failCount };
+}
+
+/* ============================================================================
+ * 7. 扫描 / 打包
+ * ==========================================================================*/
+async function scanApk(bytes, opts, log) {
+  const zip = openZip(bytes);
+  const arsc = parseArsc(await zip.read('resources.arsc'));
+  const { candidates, protectedIndices, configs } = extractCandidates(arsc, { sourceLang: opts.sourceLang });
+  const uniq = uniqueStrings(candidates, protectedIndices);
+  const items = uniq.map((u) => ({ id: `arsc:${u.index}`, kind: 'arsc', index: u.index, text: u.text, translation: '' }));
+
+  if (HAS_COMPRESSION) {
+    for (const entry of zip.entries) {
+      if (!/^res\/.*\.xml$/.test(entry.name) || /^res\/values/.test(entry.name)) continue;
+      let xml;
+      try { xml = await zip.read(entry); } catch { continue; }
+      if (xml.length < 8 || xml.readUInt16LE(0) !== RES_XML_TYPE) continue;
+      let found;
+      try { found = extractHardcodedStrings(xml); } catch { continue; }
+      for (const h of found) {
+        if (!AXML_VISIBLE_ATTRS.test(h.attrName ?? '')) continue;
+        if (looksTechnical(h.text)) continue;
+        items.push({ id: `axml:${entry.name}:${h.poolIndex}`, kind: 'axml', file: entry.name,
+                     index: h.poolIndex, text: h.text, attrName: h.attrName, translation: '' });
+      }
+    }
+  } else {
+    log('浏览器不支持 DecompressionStream，已跳过 layout 硬编码文案（资源表部分不受影响）', 'warn');
+  }
+
+  let pkgName = null;
+  try { pkgName = await readPackageName(await zip.read('AndroidManifest.xml')); } catch { /* 可能无法解压 */ }
+  const included = configs.filter((c) => c.included);
+  return { zip, arsc, items, meta: { pkgName, entries: zip.entries.length,
+    includedConfigs: included, arscStrings: uniq.length, layoutStrings: items.length - uniq.length } };
+}
+
+async function buildApk(bytes, items, opts, log) {
+  const zip = openZip(bytes);
+  const arsc = parseArsc(await zip.read('resources.arsc'));
+  const arscT = new Map();
+  const byFile = new Map();
+  for (const it of items) {
+    if (!it.translation || it.translation === it.text) continue;
+    if (it.kind === 'arsc') arscT.set(it.index, it.translation);
+    else {
+      if (!byFile.has(it.file)) byFile.set(it.file, new Map());
+      byFile.get(it.file).set(it.index, it.translation);
+    }
+  }
+  const replacements = new Map();
+  const { buf: newArsc, changed } = rebuildArsc(arsc, arscT);
+  replacements.set('resources.arsc', newArsc);
+
+  let layoutChanged = 0;
+  for (const [file, map] of byFile) {
+    const original = await zip.read(file);
+    const res = translateAxmlBuf(original, map);
+    if (res.changed > 0) { replacements.set(file, res.buf); layoutChanged += res.changed; }
+  }
+  if (opts.renamePackage) {
+    const manifest = replacements.get('AndroidManifest.xml') ?? await zip.read('AndroidManifest.xml');
+    replacements.set('AndroidManifest.xml', setPackageName(manifest, opts.renamePackage));
+  }
+
+  const writer = new ZipWriter();
+  for (const entry of zip.entries) {
+    if (V1_SIG_RE.test(entry.name)) continue;
+    if (entry.isDirectory) {
+      writer.addEntry({ name: entry.name, data: Buf.alloc(0), compress: false, externalAttr: entry.externalAttr });
+      continue;
+    }
+    if (replacements.has(entry.name)) {
+      writer.addEntry({ name: entry.name, data: replacements.get(entry.name), compress: false,
+        alignment: entry.name === 'resources.arsc' ? 4 : 0,
+        dosTime: entry.dosTime, dosDate: entry.dosDate, externalAttr: entry.externalAttr });
+    } else {
+      writer.addEntry({ name: entry.name, copyFrom: { archive: zip, entry },
+        alignment: alignmentFor(entry.name, entry.method),
+        dosTime: entry.dosTime, dosDate: entry.dosDate, externalAttr: entry.externalAttr });
+    }
+  }
+  let out = writer.finalize();
+  let verify = null, signed = false;
+  if (opts.sign !== false) {
+    const keys = await loadOrCreateKeys();
+    const r = await signApkV2(out, keys);
+    out = r.buf;
+    signed = true;
+    verify = await verifyApkV2(out);
+  }
+  return { buf: out, arscChanged: changed, layoutChanged, signed, verify };
+}
+
+
+/* ============================================================================
+ * 7.5 译文导入：结构归一化与匹配（纯逻辑，界面层直接调用）
+ * ==========================================================================*/
+
+/**
+ * 把各种可能的译文 JSON 结构统一成记录数组。
+ * 支持：命令行版 extract 导出的 {meta,items}、{strings:[...]}、裸数组、
+ *       以及 { "中文": "English" } 这种简单词表。
+ */
+function normalizeImport(json) {
+  if (Array.isArray(json)) return json;
+  if (json && Array.isArray(json.items)) return json.items;
+  if (json && Array.isArray(json.strings)) return json.strings;
+  if (json && typeof json === 'object') {
+    const dict = Object.entries(json).filter(([, v]) => typeof v === 'string');
+    if (dict.length) return dict.map(([text, translation]) => ({ text, translation }));
+  }
+  return [];
+}
+
+function pickTranslation(rec) {
+  const v = rec.translation ?? rec.translated ?? rec.target ?? rec.result ?? '';
+  return typeof v === 'string' ? v : '';
+}
+
+/**
+ * 把译文记录套用到扫描结果上。
+ * 先按 id 精确匹配（命令行版与网页版的 id 规则一致：arsc:<索引> / axml:<文件>:<索引>），
+ * 失败再按原文匹配，最大化兼容手工整理的词表。
+ * @returns {{hitId:number, hitText:number, skipped:number, blank:number}}
+ */
+function applyTranslations(items, records) {
+  const byId = new Map();
+  const byText = new Map();
+  for (const it of items) {
+    if (it.id) byId.set(it.id, it);
+    if (!byText.has(it.text)) byText.set(it.text, []);
+    byText.get(it.text).push(it);
+  }
+  let hitId = 0, hitText = 0, skipped = 0, blank = 0;
+  for (const rec of records) {
+    if (!rec || typeof rec !== 'object') { skipped++; continue; }
+    const tr = pickTranslation(rec);
+    if (!tr.trim()) { blank++; continue; }
+    const byIdHit = rec.id ? byId.get(rec.id) : null;
+    if (byIdHit) { byIdHit.translation = tr; hitId++; continue; }
+    const cands = rec.text ? byText.get(rec.text) : null;
+    if (cands && cands.length) { for (const c of cands) c.translation = tr; hitText++; continue; }
+    skipped++;
+  }
+  return { hitId, hitText, skipped, blank };
+}
+
+/* ============================================================================
+ * 7.6 免 Key 翻译引擎（内置词表 + MyMemory 免费接口）
+ *   词表与匹配器由构建脚本注入，与命令行版共用同一份数据与逻辑。
+ * ==========================================================================*/
+const DICT_MATCHER = (typeof OFFLINE_DICT !== 'undefined')
+  ? createDictMatcher(OFFLINE_DICT)
+  : { lookup: () => null, size: 0 };
+
+const MM_LANG = { zh: 'zh-CN', 'zh-cn': 'zh-CN', 'zh-tw': 'zh-TW', en: 'en-GB',
+                  ja: 'ja-JP', ko: 'ko-KR', fr: 'fr-FR', de: 'de-DE', es: 'es-ES', ru: 'ru-RU' };
+const mmLang = (c) => MM_LANG[String(c || '').toLowerCase()] ?? c;
+
+let mmQuotaExhausted = false;
+async function myMemoryOne(text, cfg, timeoutMs) {
+  if (mmQuotaExhausted) return null;
+  const pair = `${mmLang(cfg.from)}|${mmLang(cfg.to)}`;
+  let url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(pair)}`;
+  if (cfg.email) url += `&de=${encodeURIComponent(cfg.email)}`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ac.signal, headers: { accept: 'application/json' } });
+    const body = await res.text();
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j = JSON.parse(body);
+    const detail = String(j?.responseDetails ?? '');
+    if (/ALL AVAILABLE FREE TRANSLATIONS|QUOTA/i.test(detail)) {
+      mmQuotaExhausted = true;
+      throw new Error('免费配额已用完');
+    }
+    if (j?.responseStatus && j.responseStatus !== 200) throw new Error(detail.slice(0, 100) || ('status ' + j.responseStatus));
+    const t = j?.responseData?.translatedText;
+    if (typeof t !== 'string' || !t.trim()) throw new Error('返回空译文');
+    return t;
+  } finally { clearTimeout(timer); }
+}
+
+/** 只用 MyMemory 免费接口；带占位符校验与退避重试 */
+async function myMemoryTranslate(items, cfg, log, onProgress) {
+  const CONC = 2, MAX_RETRY = 4, TIMEOUT = 20000;
+  let okCount = 0, failCount = 0, done = 0, next = 0;
+  const worker = async () => {
+    while (true) {
+      const i = next++;
+      if (i >= items.length || mmQuotaExhausted) return;
+      let result = null, lastErr = null;
+      for (let attempt = 0; attempt < MAX_RETRY && result === null; attempt++) {
+        try { result = await myMemoryOne(items[i].text, cfg, TIMEOUT); }
+        catch (e) {
+          lastErr = e;
+          if (mmQuotaExhausted) break;
+          await new Promise((r) => setTimeout(r, 400 * Math.pow(2, attempt)));
+        }
+      }
+      if (result !== null && validateTranslation(items[i].text, result).ok) {
+        items[i].translation = result; okCount++;
+      } else {
+        if (result !== null) log(`第 ${i} 条译文校验失败（占位符不符），保留原文`, 'warn');
+        else if (lastErr) log(`第 ${i} 条翻译失败：${lastErr.message}`, 'warn');
+        failCount++;
+      }
+      done++;
+      onProgress?.(done, items.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONC, items.length || 1) }, worker));
+  if (mmQuotaExhausted) log('MyMemory 免费配额已用完，剩余条目保留原文', 'warn');
+  return { okCount, failCount };
+}
+
+/** 混合：内置词表优先（离线、瞬时），未命中的才走免费在线接口 */
+async function autoTranslate(items, cfg, log, onProgress) {
+  let offlineHit = 0;
+  const todo = [];
+  for (const it of items) {
+    const r = DICT_MATCHER.lookup(it.text);
+    if (r === null) todo.push(it);
+    else { it.translation = r; offlineHit++; }
+  }
+  onProgress?.(offlineHit, items.length);
+  log(`内置词表命中 ${offlineHit} 条${todo.length ? `，剩余 ${todo.length} 条走在线接口` : '（全部离线完成）'}`, 'ok');
+  let online = { okCount: 0, failCount: 0 };
+  if (todo.length) {
+    online = await myMemoryTranslate(todo, cfg, log, (d, t) => onProgress?.(offlineHit + d, items.length));
+  }
+  return { okCount: offlineHit + online.okCount, failCount: online.failCount, offlineHit, onlineHit: online.okCount };
+}
+
+/* ============================================================================
+ * 8. 界面逻辑
+ * ==========================================================================*/
+/* ============================================================================
+ * 8. 界面逻辑
+ * ==========================================================================*/
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- 提示与日志 ---------------- */
+let toastTimer = null;
+function toast(msg, kind) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (kind ? ' ' + kind : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 2600);
+}
+function log(msg, cls) {
+  const el = $('log');
+  if (!el) return;
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+  const card = el.closest('details');
+  if (card && cls === 'err' && !card.open) card.open = true;
+}
+function human(n) {
+  if (n >= 1048576) return (n / 1048576).toFixed(2) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+  return n + ' B';
+}
+
+/* ---------------- 分阶段进度条 ---------------- */
+const STAGES = {
+  read:      { label: '读取文件',       from: 0,  to: 5 },
+  scan:      { label: '解析资源表',     from: 5,  to: 26 },
+  translate: { label: '翻译文案',       from: 26, to: 78 },
+  build:     { label: '重写资源并打包', from: 78, to: 92 },
+  sign:      { label: '签名与自检',     from: 92, to: 100 },
+};
+let prog = { active: false, stage: null, detail: '' };
+
+function renderProgress() {
+  const s = STAGES[prog.stage] ?? { label: '', from: 0, to: 0 };
+  const overall = prog.indeterminate ? s.to : s.from + (s.to - s.from) * (prog.frac ?? 0);
+  $('ppFill').style.width = Math.max(0, Math.min(100, overall)).toFixed(1) + '%';
+  $('ppStage').textContent = prog.label ?? s.label;
+  $('ppPct').textContent = prog.indeterminate ? '处理中' : Math.round(overall) + '%';
+  $('ppDetail').textContent = prog.detail ?? '';
+  $('ppBar').classList.toggle('indet', !!prog.indeterminate);
+}
+function progressStart() {
+  prog = { active: true, stage: null, frac: 0, indeterminate: false, detail: '' };
+  $('progressPanel').classList.remove('hide');
+  renderProgress();
+}
+/** 切到某个阶段，并可指定该阶段内的进度(0~1)；不传则显示为不确定进度 */
+function progressStage(key, detail, frac) {
+  prog.stage = key;
+  prog.detail = detail ?? '';
+  if (frac === undefined) { prog.indeterminate = true; }
+  else { prog.indeterminate = false; prog.frac = Math.max(0, Math.min(1, frac)); }
+  prog.label = STAGES[key]?.label;
+  renderProgress();
+}
+function progressSet(frac, detail, label) {
+  prog.indeterminate = false;
+  prog.frac = Math.max(0, Math.min(1, frac));
+  if (detail !== undefined) prog.detail = detail;
+  if (label !== undefined) prog.label = label;
+  renderProgress();
+}
+function progressDone(text) {
+  prog.stage = 'sign'; prog.indeterminate = false; prog.frac = 1;
+  prog.label = text ?? '完成';
+  prog.detail = '';
+  renderProgress();
+  setTimeout(() => { $('progressPanel').classList.add('hide'); prog.active = false; }, 1100);
+}
+function progressHide() { $('progressPanel').classList.add('hide'); prog.active = false; }
+
+/* ---------------- 状态 ---------------- */
+let fileBytes = null;
+let scan = null;
+let outputBlob = null;
+let rowMap = new Map();       // item -> { tr }
+let renderLimit = 200;
+let filterMode = 'all';
+let query = '';
+const PAGE = 200;
+const AI_BATCH = 25;
+
+/* ---------------- 文件载入与扫描 ---------------- */
+$('drop').onclick = () => $('file').click();
+$('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('hover'); };
+$('drop').ondragleave = () => $('drop').classList.remove('hover');
+$('drop').ondrop = (e) => {
+  e.preventDefault(); $('drop').classList.remove('hover');
+  const f = e.dataTransfer?.files?.[0];
+  if (f) handleFile(f);
+};
+$('file').onchange = (e) => { const f = e.target.files?.[0]; if (f) handleFile(f); };
+// 页面任意位置拖入 JSON 也可导入
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => {
+  const f = e.dataTransfer?.files?.[0];
+  if (f && /\.json$/i.test(f.name)) { e.preventDefault(); doImport(f); }
+});
+
+async function handleFile(file) {
+  try {
+    if (!/\.(apk|apks|xapk)$/i.test(file.name)) {
+      toast('请选择 APK 文件', 'err');
+      return;
+    }
+    progressStart();
+    progressStage('read', file.name, 0);
+    const ab = await file.arrayBuffer();
+    fileBytes = new Buf(ab);
+    progressSet(1, human(fileBytes.length));
+    outputBlob = null;
+    $('doneCard').classList.add('hide');
+    scan = null;
+    rowMap.clear();
+    if (fileBytes.length > 120 * 1048576) {
+      log('文件超过 120MB，浏览器内存可能吃紧', 'warn');
+      toast('文件较大，处理可能较慢', 'warn');
+    }
+    await doScan();
+    toast('已载入 ' + file.name, 'ok');
+  } catch (e) {
+    log('读取失败：' + e.message, 'err');
+    toast('读取失败：' + e.message, 'err');
+    progressHide();
+  }
+}
+
+async function doScan() {
+  if (!fileBytes) { toast('请先选择 APK 文件', 'err'); return; }
+  try {
+    if (!prog.active) progressStart();
+    progressStage('scan', '正在解析 resources.arsc…');
+    const t0 = Date.now();
+    scan = await scanApk(fileBytes, { sourceLang: $('source').value }, log);
+    const m = scan.meta;
+    $('fileInfo').classList.remove('hide');
+    $('fileChips').innerHTML = [
+      ['包名', m.pkgName ?? '(未解析)'],
+      ['大小', human(fileBytes.length)],
+      ['条目', String(m.entries)],
+      ['资源表文案', String(m.arscStrings)],
+      ['布局硬编码', String(m.layoutStrings)],
+      ['纳入配置', String(m.includedConfigs.length)],
+    ].map(([k, v]) => `<span class="chip">${k} <b>${escapeHtml(v)}</b></span>`).join('');
+
+    log(`扫描完成：可翻译 ${scan.items.length} 条，用时 ${Date.now() - t0}ms`, 'ok');
+    const cfgList = m.includedConfigs.map((c) => `${c.typeName}@${c.lang || 'default'}`);
+    log('纳入的语言配置：' + (cfgList.length ? [...new Set(cfgList)].slice(0, 10).join(', ') : '(无)'));
+
+    renderLimit = PAGE;
+    renderTable();
+    $('btnBuild').disabled = false;
+    $('btnTranslate').disabled = false;
+    $('btnImport').disabled = false;
+    $('btnSaveJson').disabled = false;
+    progressSet(1, `${scan.items.length} 条待翻译`, '解析完成');
+    progressHide();
+    if (scan.items.length === 0) {
+      log('没有找到可翻译的文案。可能该应用已经是目标语言，或资源被混淆/加密。', 'warn');
+      toast('未找到可翻译文案', 'warn');
+    }
+  } catch (e) {
+    log('扫描失败：' + e.message, 'err');
+    toast('扫描失败：' + e.message, 'err');
+    progressHide();
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+/* ---------------- 表格渲染 ---------------- */
+const isDone = (it) => !!(it.translation && it.translation !== it.text);
+
+function filteredItems() {
+  if (!scan) return [];
+  let list = scan.items;
+  if (filterMode === 'todo') list = list.filter((x) => !isDone(x));
+  else if (filterMode === 'done') list = list.filter(isDone);
+  if (query) {
+    const q = query.toLowerCase();
+    list = list.filter((x) => (x.text ?? '').toLowerCase().includes(q) ||
+                             (x.translation ?? '').toLowerCase().includes(q));
+  }
+  return list;
+}
+
+function renderTable() {
+  if (!scan) return;
+  $('resultCard').classList.remove('hide');
+  const list = filteredItems();
+  const body = $('resBody');
+  body.innerHTML = '';
+  rowMap.clear();
+  const rows = list.slice(0, renderLimit);
+  const frag = document.createDocumentFragment();
+  rows.forEach((it, i) => {
+    const tr = document.createElement('tr');
+    if (isDone(it)) tr.classList.add('done');
+    const td1 = document.createElement('td');
+    td1.className = 'cell-idx';
+    td1.textContent = i + 1;
+    const td2 = document.createElement('td');
+    td2.className = 'cell-src';
+    td2.textContent = it.text;
+    const td3 = document.createElement('td');
+    const ta = document.createElement('textarea');
+    ta.rows = 1;
+    ta.value = it.translation ?? '';
+    ta.placeholder = '留空则保持原文';
+    ta.oninput = () => { it.translation = ta.value; tr.classList.toggle('done', isDone(it)); updateStats(); };
+    td3.appendChild(ta);
+    tr.append(td1, td2, td3);
+    frag.appendChild(tr);
+    rowMap.set(it, { tr, ta });
+  });
+  body.appendChild(frag);
+  $('tableEmpty').classList.toggle('hide', list.length !== 0);
+  $('btnMore').classList.toggle('hide', list.length <= renderLimit);
+  $('btnMore').textContent = `显示更多（还有 ${Math.max(0, list.length - renderLimit)} 条）`;
+  updateStats();
+}
+
+/** AI 翻译过程中把已更新的译文同步到表格（不打断正在输入的格子） */
+function syncRows() {
+  for (const [it, r] of rowMap) {
+    const want = it.translation ?? '';
+    if (r.ta !== document.activeElement && r.ta.value !== want) {
+      r.ta.value = want;
+      r.tr.classList.toggle('done', isDone(it));
+    }
+  }
+  updateStats();
+}
+
+function updateStats() {
+  if (!scan) return;
+  const total = scan.items.length;
+  const done = scan.items.filter(isDone).length;
+  $('transStats').textContent = done ? `已翻译 ${done}/${total}` : `待翻译 ${total}`;
+  $('transStats').className = 'tag' + (done === total && total > 0 ? ' ok' : '');
+  $('resCount').textContent = `${done}/${total}`;
+}
+
+$('btnMore').onclick = () => { renderLimit += PAGE; renderTable(); };
+$('search').oninput = (e) => { query = e.target.value.trim(); renderLimit = PAGE; renderTable(); };
+$('filterTabs').onclick = (e) => {
+  const btn = e.target.closest('.tab');
+  if (!btn) return;
+  filterMode = btn.dataset.filter;
+  [...$('filterTabs').children].forEach((b) => b.classList.toggle('active', b === btn));
+  renderLimit = PAGE;
+  renderTable();
+};
+
+/* ---------------- 翻译（免费 / AI 两种方式） ---------------- */
+let engine = 'auto';
+
+function updateKeyState() {
+  const has = !!$('apiKey').value.trim();
+  $('keyState').textContent = has ? '已配置' : '未配置 Key';
+  $('keyState').className = 'tag' + (has ? ' ok' : '');
+}
+
+function setEngine(next) {
+  engine = next;
+  [...$('engineSeg').children].forEach((b) => b.classList.toggle('active', b.dataset.engine === next));
+  const isAi = next === 'ai';
+  const size = (typeof DICT_SIZE !== 'undefined') ? DICT_SIZE : 0;
+  $('engineHintText').innerHTML = isAi
+    ? '使用 AI 模型翻译，质量最好，需要填写 DeepSeek API Key。'
+    : '<b>无需 API Key</b>：先用内置词表' + (size ? '（' + size + ' 条常用界面文案，离线瞬时）' : '') + '，未命中的再走 MyMemory 免费接口。';
+  $('btnTranslate').textContent = isAi ? '✨ 开始 AI 翻译' : '🆓 开始翻译';
+  if (isAi) $('aiSettings').open = true;
+}
+
+$('engineSeg').onclick = (e) => {
+  const btn = e.target.closest('.seg-item');
+  if (btn) setEngine(btn.dataset.engine);
+};
+
+$('btnTranslate').onclick = async () => {
+  if (!scan) return;
+  const limit = Number($('limit').value || 0);
+  const targets = limit > 0 ? scan.items.slice(0, limit) : scan.items;
+  if (!targets.length) { toast('没有可翻译的条目', 'warn'); return; }
+  const isAi = engine === 'ai';
+  const cfg = { key: $('apiKey').value.trim(), base: $('apiBase').value, model: $('apiModel').value,
+                from: $('source').value, to: $('target').value };
+  if (isAi && !cfg.key) {
+    toast('AI 翻译需要 API Key，或改用「免费翻译」', 'err');
+    $('aiSettings').open = true; $('apiKey').focus();
+    return;
+  }
+  if (isAi) safeStore.set('apk-i18n-key', cfg.key);
+  setBusy(true);
+  progressStart();
+  progressStage('translate', '准备翻译…', 0);
+  log(isAi ? ('开始 AI 翻译 ' + targets.length + ' 条 → ' + $('target').value)
+           : ('开始免费翻译 ' + targets.length + ' 条 → ' + $('target').value + '（词表优先）'));
+  const t0 = Date.now();
+  try {
+    const onProg = (d, t) => {
+      progressSet(d / Math.max(1, t), d + '/' + t + ' 条 · 已译 ' + targets.filter(isDone).length + ' 条');
+      syncRows();
+    };
+    const r = isAi
+      ? await aiTranslate(targets, cfg, log, onProg)
+      : await autoTranslate(targets, cfg, log, onProg);
+    const secs = ((Date.now() - t0) / 1000).toFixed(0);
+    if (!isAi && r.offlineHit !== undefined) {
+      log('翻译完成：内置词表 ' + r.offlineHit + ' 条，在线 ' + r.onlineHit + ' 条，保留原文 ' + r.failCount + ' 条，用时 ' + secs + 's',
+          r.failCount ? 'warn' : 'ok');
+    } else {
+      log('翻译完成：成功 ' + r.okCount + ' 条，保留原文 ' + r.failCount + ' 条，用时 ' + secs + 's',
+          r.failCount ? 'warn' : 'ok');
+    }
+    toast(r.failCount ? ('完成，' + r.failCount + ' 条保留原文') : ('翻译完成 ' + r.okCount + ' 条'),
+          r.failCount ? 'warn' : 'ok');
+    renderTable();
+    progressDone('翻译完成');
+  } catch (e) {
+    log('翻译失败：' + e.message, 'err');
+    if (isAi) log('若为网络/CORS 错误，可改用「免费翻译」或「导入译文」。', 'warn');
+    toast('翻译失败：' + e.message, 'err');
+    progressHide();
+  } finally { setBusy(false); }
+};
+
+/* ---------------- 导入 / 导出译文 ---------------- */
+$('btnImport').onclick = () => $('importFile').click();
+$('importFile').onchange = (e) => {
+  const f = e.target.files?.[0];
+  if (f) doImport(f);
+  e.target.value = '';
+};
+
+async function doImport(file) {
+  try {
+    if (!scan) {
+      if (!fileBytes) { toast('请先选择 APK 文件', 'err'); return; }
+      log('尚未扫描 APK，先自动扫描再导入…');
+      await doScan();
+      if (!scan) return;
+    }
+    const raw = await file.text();
+    let json;
+    try { json = JSON.parse(raw); }
+    catch { throw new Error('不是合法的 JSON 文件'); }
+
+    const records = normalizeImport(json);
+    if (!records.length) throw new Error('文件里没有可识别的译文记录');
+
+    // 提示源 APK 是否一致
+    const srcPkg = json?.meta?.packageName ?? json?.meta?.pkgName ?? null;
+    if (srcPkg && scan.meta.pkgName && srcPkg !== scan.meta.pkgName) {
+      log(`注意：译文文件来自「${srcPkg}」，当前 APK 是「${scan.meta.pkgName}」，仍会按原文匹配尝试导入`, 'warn');
+    }
+
+    const { hitId, hitText, skipped, blank } = applyTranslations(scan.items, records);
+
+    renderTable();
+    const total = hitId + hitText;
+    log(`导入完成：按 ID 命中 ${hitId} 条，按原文命中 ${hitText} 条，未匹配 ${skipped} 条` +
+        (blank ? `，文件内空译文 ${blank} 条` : ''), total ? 'ok' : 'warn');
+    if (total) {
+      toast(`已导入 ${total} 条译文`, 'ok');
+    } else {
+      toast('没有匹配到任何条目，请确认译文文件对应同一个 APK', 'err');
+      log('提示：译文文件的 ID 形如 arsc:123 / axml:res/layout/a.xml:5，需要与当前 APK 扫描结果一致。', 'warn');
+    }
+  } catch (e) {
+    log('导入失败：' + e.message, 'err');
+    toast('导入失败：' + e.message, 'err');
+  }
+}
+
+$('btnSaveJson').onclick = () => {
+  if (!scan) return;
+  const payload = {
+    meta: { ...scan.meta, exportedAt: new Date().toISOString(), source: 'apk-i18n-web' },
+    items: scan.items.map((it) => ({
+      id: it.id, kind: it.kind, index: it.index, file: it.file,
+      text: it.text, translation: it.translation ?? '',
+    })),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'apk-i18n-strings.json';
+  a.click();
+  toast('已导出译文 JSON', 'ok');
+};
+
+/* ---------------- 打包 ---------------- */
+$('btnBuild').onclick = async () => {
+  if (!scan) return;
+  const filled = scan.items.filter(isDone).length;
+  if (filled === 0) {
+    toast('还没有任何译文，产物将与原包一致', 'warn');
+  }
+  setBusy(true);
+  progressStart();
+  progressStage('build', '正在重写资源表…', 0);
+  log(`开始打包：将写入 ${filled} 条译文`);
+  try {
+    const r = await buildApk(fileBytes, scan.items, { sign: true }, log);
+    progressStage('sign', '正在生成签名并自检…', 0.3);
+    await new Promise((r2) => setTimeout(r2, 60)); // 让进度可见
+    outputBlob = new Blob([r.buf], { type: 'application/vnd.android.package-archive' });
+    progressSet(1, '完成');
+    $('doneCard').classList.remove('hide');
+    $('doneInfo').innerHTML = [
+      ['产物大小', human(r.buf.length)],
+      ['资源表改动', `${r.arscChanged} 条`],
+      ['布局改动', `${r.layoutChanged} 条`],
+      ['v2 签名', r.signed ? '<span class="ok">已签名</span>' : '<span class="err">未签名</span>'],
+      ['签名自检', r.verify?.valid ? '<span class="ok">通过</span>' : `<span class="err">失败</span>`],
+    ].map(([k, v]) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`).join('');
+    log(`打包完成：资源表改动 ${r.arscChanged} 条，布局改动 ${r.layoutChanged} 条`, 'ok');
+    if (!r.verify?.valid) log('签名自检失败：' + JSON.stringify(r.verify?.errors), 'err');
+    toast('打包完成，可以下载了', r.verify?.valid ? 'ok' : 'warn');
+    $('doneCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    progressDone('打包完成');
+  } catch (e) {
+    log('打包失败：' + e.message, 'err');
+    toast('打包失败：' + e.message, 'err');
+    progressHide();
+  } finally { setBusy(false); }
+};
+
+$('btnDownload').onclick = () => {
+  if (!outputBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(outputBlob);
+  a.download = (scan?.meta?.pkgName ? scan.meta.pkgName.split('.').pop() : 'app') + '-translated.apk';
+  a.click();
+  toast('已开始下载', 'ok');
+};
+
+/* ---------------- 通用忙碌态 ---------------- */
+function setBusy(busy) {
+  for (const id of ['btnTranslate', 'btnBuild', 'btnImport', 'btnSaveJson']) {
+    const el = $(id);
+    if (!el) continue;
+    if (busy) { el.dataset.wasDisabled = el.disabled ? '1' : '0'; el.disabled = true; }
+    else el.disabled = !scan;
+  }
+  if (!busy && scan) {
+    for (const id of ['btnTranslate', 'btnBuild', 'btnImport', 'btnSaveJson']) $(id).disabled = false;
+  }
+}
+
+
+/* ---------------- 环境自检 ----------------
+   这个文件会被转发给不特定的人，环境不满足时要当场说清楚，
+   而不是等到"打包"时才莫名其妙失败。 */
+function checkEnvironment() {
+  const el = $('envBanner');
+  const problems = [];
+  const secure = globalThis.isSecureContext === true;
+  const hasSubtle = !!(globalThis.crypto && globalThis.crypto.subtle);
+
+  if (!hasSubtle) {
+    problems.push(['err',
+      '<b>当前环境不支持 WebCrypto，无法签名打包。</b>' +
+      '生成 APK 必须用浏览器的加密接口（只在安全环境开放）。<br>' +
+      '请改用 <b>Chrome / Edge / 夸克</b> 等浏览器打开本文件；' +
+      (secure ? '' : '若通过链接访问，请确认是 <code>https://</code> 开头。')]);
+  }
+  if (!HAS_COMPRESSION) {
+    problems.push(['warn',
+      '<b>当前浏览器较旧，缺少 DecompressionStream。</b>' +
+      'layout 里硬编码的文案会被跳过（资源表部分不受影响）。建议升级到 Chrome 103+。']);
+  }
+  if (typeof OFFLINE_DICT === 'undefined') {
+    problems.push(['warn', '内置词表未加载，免费翻译会全部走在线接口。']);
+  }
+
+  if (problems.length === 0) { el.classList.add('hide'); return; }
+  const level = problems.some((p) => p[0] === 'err') ? 'err' : 'warn';
+  el.className = 'banner ' + level;
+  el.innerHTML = '<span>' + (level === 'err' ? '⛔' : '⚠️') + '</span><span>' +
+    problems.map((p) => p[1]).join('<br><br>') + '</span>';
+}
+
+/* ---------------- 初始化 ---------------- */
+{
+  const savedKey = safeStore.get('apk-i18n-key');
+  if (savedKey) {
+    $('apiKey').value = savedKey;
+    updateKeyState();
+  }
+  $('apiKey').oninput = updateKeyState;
+  $('btnTranslate').disabled = true;
+  $('btnBuild').disabled = true;
+  $('btnImport').disabled = true;
+  $('btnSaveJson').disabled = true;
+  if (!HAS_COMPRESSION) {
+    log('当前浏览器不支持 DecompressionStream，将跳过 layout 硬编码文案（资源表不受影响）', 'warn');
+  }
+  setEngine('auto');
+  checkEnvironment();
+  log('就绪。选择一个 APK 文件开始。');
+}
+</script>
+</body>
+</html>
